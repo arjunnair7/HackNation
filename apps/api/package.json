@@ -7,7 +7,8 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "setup:agents": "tsx scripts/setup-agents.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
@@ -26,6 +27,7 @@
     "@nestjs/schematics": "^12.0.0",
     "@types/express": "^5.0.6",
     "@types/node": "^24.19.1",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2"
   }
 }

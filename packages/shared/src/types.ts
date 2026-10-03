@@ -92,6 +92,30 @@ export interface MasteryRecord {
 }
 
 // ---------------------------------------------------------------------------
+// ElevenLabs client tools (BUILD_PLAN §6). Names and params are case-sensitive:
+// apps/api/scripts/setup-agents.ts registers exactly these, the web app handles them.
+// ---------------------------------------------------------------------------
+
+export interface InterviewerToolParams {
+  record_answer: {
+    moment_id: string; reason_quote: string; decision_summary?: string;
+    guardrail_text?: string; guardrail_kind?: GuardrailKind;
+  };
+  go_off_record: Record<string, never>;
+  submit_correction: { correction: string };
+  confirm_teachback: Record<string, never>;
+}
+
+export interface TutorToolParams {
+  record_prediction: { step_id: string; correct: boolean; trainee_answer?: string };
+  replay_expert_moment: { step_id: string };
+  show_mastery_report: Record<string, never>;
+}
+
+export type InterviewerToolName = keyof InterviewerToolParams;
+export type TutorToolName = keyof TutorToolParams;
+
+// ---------------------------------------------------------------------------
 // Sandbox ERP (BUILD_PLAN §5)
 // ---------------------------------------------------------------------------
 
