@@ -120,6 +120,19 @@ const SKIP_TURN = {
   params: { system_tool_type: 'skip_turn' },
 };
 
+// Setting client_events replaces ElevenLabs' defaults, so keep them (first six) and add what
+// the web app needs: client_tool_call for the tool handlers, vad_score for "expert is talking" (Phase 4).
+const CLIENT_EVENTS = [
+  'audio',
+  'interruption',
+  'agent_response',
+  'user_transcript',
+  'agent_response_correction',
+  'agent_tool_response',
+  'client_tool_call',
+  'vad_score',
+];
+
 // Dashboard-testing defaults only; the web app passes real values to startSession().
 const PLACEHOLDERS = {
   expert_name: 'Sabine',
@@ -165,7 +178,7 @@ function agentConfig(role: Role, toolIds: string[]) {
       },
       ...(Object.keys(tts).length > 0 && { tts }),
       turn: { turn_timeout: 30, turn_eagerness: 'patient' },
-      conversation: { max_duration_seconds: 1800 },
+      conversation: { max_duration_seconds: 1800, client_events: CLIENT_EVENTS },
     },
   };
 }
