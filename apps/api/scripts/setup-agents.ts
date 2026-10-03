@@ -46,7 +46,7 @@ interface ToolSpec {
 const INTERVIEWER_TOOLS: Record<InterviewerToolName, ToolSpec> = {
   record_answer: {
     description:
-      'Call right after the expert answers one of your questions. Records their reason in their own words.',
+      'Call right after the expert answers one of your questions. Records their reason in their own words. Only after they have replied to a question you asked out loud, never in the same turn as asking it.',
     params: {
       moment_id: { type: 'string', description: 'The candidate or open-question id you asked about.' },
       reason_quote: { type: 'string', description: "The expert's words, verbatim as far as possible." },
@@ -116,7 +116,7 @@ const SKIP_TURN = {
   type: 'system',
   name: 'skip_turn',
   description:
-    'Call this to stay silent: when the person is working, reading, thinking aloud or talking to themselves without addressing you, or when you get a turn only because of silence.',
+    'Call this to stay silent: when the person is working, reading, thinking aloud or talking to themselves without addressing you, or when you get a turn only because of silence. Never call it in reply to an app cue ([ASK_NOW], [DEBRIEF], [TEACHBACK], [STEP_START], [PREDICT], [GUARDRAIL_RISK], [GUARDRAIL_BLOCKED], [SESSION_END]).',
   params: { system_tool_type: 'skip_turn' },
 };
 

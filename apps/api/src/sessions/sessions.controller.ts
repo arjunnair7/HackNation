@@ -1,7 +1,8 @@
 import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Res } from '@nestjs/common';
 import { existsSync } from 'node:fs';
 import type { Response } from 'express';
-import type { FrameUploadResponse, ScreenEvent, Session, Utterance } from '@apprentice/shared';
+import type { Answer, FrameUploadResponse, Moment, ScreenEvent, Session, Utterance } from '@apprentice/shared';
+import { MomentsService } from '../moments/moments.service';
 import { SessionStore } from './session.store';
 import { SessionsService } from './sessions.service';
 
@@ -10,6 +11,7 @@ export class SessionsController {
   constructor(
     private readonly sessions: SessionsService,
     private readonly store: SessionStore,
+    private readonly moments: MomentsService,
   ) {}
 
   /** Body: CreateSessionRequest (defaults to a capture session with Sabine). */
@@ -42,6 +44,19 @@ export class SessionsController {
     const file = frame && this.store.frameFile(id, frame.path);
     if (!file || !existsSync(file)) throw new NotFoundException(`Frame ${frameId} not found`);
     res.type('image/jpeg').sendFile(file);
+  }
+
+  /** Body: RecordAnswerRequest (record_answer client tool). Waits ~1.5 s so the expert's last line is in. */
+  @Post(':id/answers')
+  answer(@Param('id') id: string, @Body() body: unknown): Promise<Answer> {
+    return this.moments.recordAnswer(id, body);
+  }
+
+  /** Body: MomentStatusRequest. The web detector marks candidates offered / expired. */
+  @Post(':id/moments/status')
+  @HttpCode(200)
+  momentStatus(@Param('id') id: string, @Body() body: unknown): Moment[] {
+    return this.moments.setStatus(id, body);
   }
 
   /** Body: DebugEventRequest. Debug drawer only. */

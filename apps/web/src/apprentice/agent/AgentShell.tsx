@@ -1,24 +1,37 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ConversationProvider, useConversation } from '@elevenlabs/react'
-import type { DebugEventRequest, ScreenEventsMessage, Session, VisionErrorMessage } from '@apprentice/shared'
+import type {
+  AnswerRecordedMessage,
+  DebugEventRequest,
+  GuardrailKind,
+  Moment,
+  MomentsUpdatedMessage,
+  ScreenEventsMessage,
+  Session,
+  VisionErrorMessage,
+} from '@apprentice/shared'
 import { DEFAULT_DIFF_THRESHOLD } from '../capture/frameDiff.ts'
 import { useScreenCapture } from '../capture/useScreenCapture.ts'
 import { api } from '../lib/api.ts'
 import { formatT, sessionT, useNow } from '../lib/clock.ts'
 import { useLog, type LogKind } from '../lib/log.ts'
 import { getSocket } from '../lib/socket.ts'
+import { BrainPanel } from '../panels/BrainPanel.tsx'
 import { CapturePanel } from '../panels/CapturePanel.tsx'
 import { DebugDrawer } from '../panels/DebugDrawer.tsx'
 import { LiveFeed } from '../panels/LiveFeed.tsx'
 import { useApprenticeClientTools } from './clientTools.ts'
 import { screenCue, type CueChannel } from './cues.ts'
+import { RULES } from './momentRules.ts'
+import { useMomentDetector, type VoiceSignal } from './useMomentDetector.ts'
 import '../apprentice.css'
 
 const INTERVIEWER_AGENT_ID = import.meta.env.VITE_INTERVIEWER_AGENT_ID
 const EXPERT = { name: 'Sabine', role: 'accounts payable lead' }
 const TASK_NAME = 'processing supplier invoices before period close'
-const FEED_KINDS = new Set<LogKind>(['expert', 'agent', 'screen', 'error'])
+const FEED_KINDS = new Set<LogKind>(['expert', 'agent', 'screen', 'answer', 'error'])
+const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
 
 /** Window B. The ElevenLabs provider wraps everything so any panel can reach the conversation. */
 export function AgentShell() {
@@ -39,6 +52,8 @@ function ApprenticeApp() {
   const sessionRef = useRef<Session | null>(null)
   const [starting, setStarting] = useState(false)
   const [lastVision, setLastVision] = useState<ScreenEventsMessage | null>(null)
+  const [moments, setMoments] = useState<Moment[]>([])
+  const voice = useRef<VoiceSignal>({ level: 0, lastAboveAt: 0, lastTranscriptAt: 0, seen: false })
   const now = useNow(1000)
 
   useEffect(() => {
@@ -51,11 +66,21 @@ function ApprenticeApp() {
     onConnect: () => add('info', 'Agent connected', tNow()),
     onDisconnect: (details) => add('info', `Agent disconnected (${details.reason})`, tNow()),
     onError: (message) => add('error', `Agent: ${message}`, tNow()),
+    // Q1 "is the expert talking?" (needs vad_score in the agent's client_events).
+    onVadScore: ({ vadScore }) => {
+      voice.current.level = vadScore
+      voice.current.seen = true
+      if (vadScore > RULES.vadThreshold) voice.current.lastAboveAt = Date.now()
+    },
     // Final transcript lines only (user_transcript / agent_response).
     onMessage: ({ message, role }) => {
       const s = sessionRef.current
       if (!s) return
       const t = sessionT(s.startedAtMs)
+      if (role === 'user') {
+        voice.current.lastAboveAt = Date.now() // fallback if VAD never arrives
+        voice.current.lastTranscriptAt = Date.now()
+      }
       add(role === 'agent' ? 'agent' : 'expert', message, t)
       api.postTranscript(s.id, { t, role, text: message }).catch((err: Error) => add('error', `Transcript not saved: ${err.message}`, t))
     },
@@ -66,8 +91,6 @@ function ApprenticeApp() {
   useEffect(() => {
     connectedRef.current = connected
   }, [connected])
-
-  useApprenticeClientTools((name, toolParams) => add('tool', `${name} ${JSON.stringify(toolParams)}`, tNow()))
 
   const capture = useScreenCapture({
     threshold: diffThreshold,
@@ -82,6 +105,43 @@ function ApprenticeApp() {
       api.postFrame(s.id, { t, jpegBase64 }).catch((err: Error) => add('error', `Frame not sent: ${err.message}`, t))
     },
   })
+
+  const detector = useMomentDetector({
+    sessionId: session?.id,
+    expertName: EXPERT.name,
+    connected,
+    agentSpeaking: mode === 'speaking',
+    offRecord: false, // Phase 5
+    moments,
+    lastScreenChangeAt: capture.lastScreenChangeAt,
+    voice,
+    sendUserMessage,
+    onAsk: (cue) => add('cue', cue, tNow()),
+    onAwaitTimeout: () => add('info', 'No answer recorded within 30 s; those moments go to the debrief', tNow()),
+  })
+
+  useApprenticeClientTools(
+    {
+      record_answer: (p) => {
+        const s = sessionRef.current
+        if (!s) return
+        if (!detector.acceptAnswer()) {
+          add('info', `Ignored record_answer before ${EXPERT.name} answered (agent jumped ahead)`, tNow())
+          return
+        }
+        api
+          .recordAnswer(s.id, {
+            momentId: String(p.moment_id ?? ''),
+            reasonQuote: String(p.reason_quote ?? ''),
+            decisionSummary: str(p.decision_summary),
+            guardrailText: str(p.guardrail_text),
+            guardrailKind: str(p.guardrail_kind) as GuardrailKind | undefined,
+          })
+          .catch((err: Error) => add('error', `Answer not saved: ${err.message}`, tNow()))
+      },
+    },
+    (name, toolParams) => add('tool', `${name} ${JSON.stringify(toolParams)}`, tNow()),
+  )
 
   // Vision results → feed + contextual updates for the agent (it is told never to react to them on its own).
   useEffect(() => {
@@ -98,11 +158,22 @@ function ApprenticeApp() {
     const onVisionError = (m: VisionErrorMessage) => {
       if (m.sessionId === sessionRef.current?.id) add('error', `Vision failed on ${m.frameId}: ${m.error}`, m.t)
     }
+    const onMoments = (m: MomentsUpdatedMessage) => {
+      if (m.sessionId === sessionRef.current?.id) setMoments(m.moments)
+    }
+    const onAnswer = (m: AnswerRecordedMessage) => {
+      if (m.sessionId !== sessionRef.current?.id) return
+      add('answer', `"${m.answer.quote}"${m.answer.guardrailText ? ` · guardrail: ${m.answer.guardrailText}` : ''}`, m.answer.t)
+    }
     socket.on('screen_events', onScreenEvents)
     socket.on('vision_error', onVisionError)
+    socket.on('moments_updated', onMoments)
+    socket.on('answer_recorded', onAnswer)
     return () => {
       socket.off('screen_events', onScreenEvents)
       socket.off('vision_error', onVisionError)
+      socket.off('moments_updated', onMoments)
+      socket.off('answer_recorded', onAnswer)
     }
   }, [add, sendContextualUpdate])
 
@@ -120,6 +191,8 @@ function ApprenticeApp() {
       sessionRef.current = s
       setSession(s)
       setLastVision(null)
+      setMoments([])
+      detector.reset()
       add('info', `Session ${s.id} started`, 0)
       startSession({
         agentId: INTERVIEWER_AGENT_ID,
@@ -194,6 +267,8 @@ function ApprenticeApp() {
           <code>npm run dev</code>.
         </div>
       )}
+
+      <BrainPanel brain={detector.brain} moments={moments} expertName={EXPERT.name} />
 
       <CapturePanel
         sessionId={session?.id}

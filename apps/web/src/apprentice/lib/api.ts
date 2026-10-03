@@ -1,8 +1,12 @@
 import type {
+  Answer,
   CreateSessionRequest,
   DebugEventRequest,
   FrameUploadRequest,
   FrameUploadResponse,
+  Moment,
+  MomentStatusRequest,
+  RecordAnswerRequest,
   ScreenEvent,
   Session,
   TranscriptRequest,
@@ -30,5 +34,8 @@ export const api = {
   postFrame: (sessionId: string, body: FrameUploadRequest) =>
     post<FrameUploadResponse>(`/sessions/${sessionId}/frames`, body),
   injectEvent: (sessionId: string, body: DebugEventRequest) => post<ScreenEvent>(`/sessions/${sessionId}/events`, body),
+  recordAnswer: (sessionId: string, body: RecordAnswerRequest) => post<Answer>(`/sessions/${sessionId}/answers`, body),
+  setMomentStatus: (sessionId: string, body: MomentStatusRequest) =>
+    post<Moment[]>(`/sessions/${sessionId}/moments/status`, body),
   frameUrl: (sessionId: string, frameId: string) => `/api/sessions/${sessionId}/frames/${frameId}`,
 }

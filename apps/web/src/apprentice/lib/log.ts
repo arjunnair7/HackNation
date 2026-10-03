@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 
-export type LogKind = 'expert' | 'agent' | 'screen' | 'cue' | 'tool' | 'info' | 'error'
+export type LogKind = 'expert' | 'agent' | 'screen' | 'answer' | 'cue' | 'tool' | 'info' | 'error'
 
 export interface LogEntry {
   id: number

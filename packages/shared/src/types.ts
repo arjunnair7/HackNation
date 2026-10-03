@@ -43,6 +43,7 @@ export interface Moment {                // a candidate "why" moment (Q2)
   suggestedType: 'WHY' | 'LIMIT' | 'STOP' | 'NEVER' | 'EXCEPTION';
   coveredByNarration: boolean;          // expert already explained → don't ask
   status: 'pending' | 'offered' | 'asked' | 'answered' | 'expired';
+  narrationChecked?: boolean;           // the §7.5 check has run; only checked moments get offered
 }
 
 export interface Answer {
@@ -125,6 +126,28 @@ export interface ScreenEventsMessage {
 
 /** socket `vision_error` */
 export interface VisionErrorMessage { sessionId: string; frameId: string; t: number; error: string }
+
+// ---------------------------------------------------------------------------
+// Moments + answers (Phase 4)
+// ---------------------------------------------------------------------------
+
+/** POST /api/sessions/:id/answers (from the record_answer client tool). */
+export interface RecordAnswerRequest {
+  momentId: string;                     // moment or open-question id the agent asked about
+  reasonQuote: string;                  // the agent's rendering; fallback only, the server quotes the transcript
+  decisionSummary?: string;
+  guardrailText?: string;
+  guardrailKind?: GuardrailKind;
+}
+
+/** POST /api/sessions/:id/moments/status */
+export interface MomentStatusRequest { ids: string[]; status: 'offered' | 'pending' | 'expired' }
+
+/** socket `moments_updated`: the session's full moment list. */
+export interface MomentsUpdatedMessage { sessionId: string; moments: Moment[] }
+
+/** socket `answer_recorded` */
+export interface AnswerRecordedMessage { sessionId: string; answer: Answer }
 
 // ---------------------------------------------------------------------------
 // ElevenLabs client tools (BUILD_PLAN §6). Names and params are case-sensitive:

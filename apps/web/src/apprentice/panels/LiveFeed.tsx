@@ -6,6 +6,7 @@ const LABEL: Record<LogKind, string> = {
   expert: 'Expert',
   agent: 'Apprentice',
   screen: 'Screen',
+  answer: 'Answer',
   cue: 'Cue',
   tool: 'Tool',
   info: 'Info',

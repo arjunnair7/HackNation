@@ -8,6 +8,7 @@ Rules:
 - Events: opened (a record was opened), navigated (switched page/tab), field_changed (value differs from previous state — give field, from, to), action (a button outcome is visible: approved, held, routed, status change), lookup (the user opened reference info like supplier history), typed (free text entered), read (no change; user is reading a record), other.
 - "description" is one short sentence a colleague would understand, e.g. "Cost center on INV-4471 changed 4711 → 0400 (Maintenance → Capital Equipment)".
 - If nothing meaningful changed, return an empty events array.
+- If a different record is open than in the previous state, report one opened event for it. Do not report field_changed between two different records.
 - PRIVACY: never output names of private persons, IBANs or bank account numbers, emails, phone numbers or street addresses. Replace them with [NAME], [IBAN], [EMAIL], [PHONE], [ADDRESS]. Company names, invoice ids, amounts and cost centers are fine. Also return pii_regions: normalized boxes of any such data visible in the frame.`;
 
 export const REPORT_SCREEN_TOOL: ToolDef = {
@@ -19,7 +20,11 @@ export const REPORT_SCREEN_TOOL: ToolDef = {
     properties: {
       screen: { type: 'string', description: 'invoice_list | invoice_detail | supplier_history | other' },
       entity: { type: 'string', description: 'main record id visible, e.g. INV-4471' },
-      state: { type: 'object', description: 'visible key fields: supplier, amount, cost_center, asset_number, status, active_tab…' },
+      state: {
+        type: 'object',
+        description:
+          'visible key fields: supplier, amount, cost_center, asset_number, status, active_tab… When an invoice is open, always include cost_center, asset_number, status and active_tab (empty string if blank).',
+      },
       events: {
         type: 'array',
         items: {

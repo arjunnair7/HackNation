@@ -10,6 +10,7 @@ import type {
   Utterance,
 } from '@apprentice/shared';
 import { newId } from '../common/ids';
+import { MomentsService } from '../moments/moments.service';
 import { EventsGateway } from '../realtime/events.gateway';
 import { VisionService } from '../vision/vision.service';
 import { SessionStore } from './session.store';
@@ -27,6 +28,7 @@ export class SessionsService {
     private readonly store: SessionStore,
     private readonly vision: VisionService,
     private readonly gateway: EventsGateway,
+    private readonly moments: MomentsService,
   ) {}
 
   create(body: unknown): Session {
@@ -100,6 +102,7 @@ export class SessionsService {
       sessionId, frameId: 'debug', t, screen: 'debug', entity: event.entity, events: [event], ms: 0,
     };
     this.gateway.emit('screen_events', message);
+    this.moments.onEvents(sessionId, [event]);
     return event;
   }
 }
