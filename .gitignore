@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+
+# secrets / local config
+.env
+.env.local
+
+# runtime storage (sessions, frames, ERP state); demo seed gets committed later
+/data/*
+!/data/demo/

@@ -1,0 +1,17 @@
+{
+  "name": "apprentice",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,magenta \"npm run dev -w @apprentice/api\" \"npm run dev -w @apprentice/web\"",
+    "build": "npm run build -w @apprentice/api && npm run build -w @apprentice/web",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "typescript": "~6.0.2"
+  }
+}
