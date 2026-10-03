@@ -1,0 +1,15 @@
+{
+  "tools": {
+    "record_answer": "tool_7201m41sxyngfr1t5sfbntz5aax0",
+    "go_off_record": "tool_3901m41sxyvnebasjbpg79x17dww",
+    "submit_correction": "tool_6601m41sxz0qfafbfwk907g1khnr",
+    "confirm_teachback": "tool_4001m41sxz5yf0qa9bbw7sv4j0kc",
+    "record_prediction": "tool_9601m41sxzanf33vts8r3drwhark",
+    "replay_expert_moment": "tool_6701m41sxzg1egfr19dt95wpn34g",
+    "show_mastery_report": "tool_7901m41sxzmqf3e8502461wczp7y"
+  },
+  "agents": {
+    "interviewer": "agent_4901m41sxzsce89rfps3rq1qe5p4",
+    "tutor": "agent_4101m41sy2ggeqkt4wgzjk559hey"
+  }
+}
