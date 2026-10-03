@@ -86,6 +86,13 @@ export class SessionStore {
     return rel;
   }
 
+  /** Sidecar JSON next to a frame (e.g. the vision result for it). */
+  writeFrameJson(sessionId: string, frameId: string, data: unknown): void {
+    if (!SAFE_ID.test(frameId)) throw new Error(`Unsafe frame id ${frameId}`);
+    mkdirSync(join(this.dir(sessionId), 'frames'), { recursive: true });
+    writeFileSync(join(this.dir(sessionId), 'frames', `${frameId}.json`), JSON.stringify(data, null, 2));
+  }
+
   /** Absolute path of a stored frame (FrameRef.path is relative). */
   frameFile(sessionId: string, relPath: string): string {
     return join(this.dir(sessionId), relPath);

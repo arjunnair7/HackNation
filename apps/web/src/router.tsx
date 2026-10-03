@@ -1,5 +1,5 @@
 import { Link, Navigate, createBrowserRouter, useParams } from 'react-router-dom'
-import { ApprenticePage } from './apprentice/ApprenticePage.tsx'
+import { AgentShell } from './apprentice/agent/AgentShell.tsx'
 import { ErpLayout } from './erp/ErpLayout.tsx'
 import { InvoiceDetailPage } from './erp/InvoiceDetailPage.tsx'
 import { InvoiceListPage } from './erp/InvoiceListPage.tsx'
@@ -31,6 +31,6 @@ export const router = createBrowserRouter([
       { path: 'invoices/:invoiceId', element: <InvoiceDetailRoute /> },
     ],
   },
-  { path: '/apprentice', element: <ApprenticePage /> },
+  { path: '/apprentice', element: <AgentShell /> },
   { path: '*', element: <NotFound /> },
 ])

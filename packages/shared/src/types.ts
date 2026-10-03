@@ -92,6 +92,41 @@ export interface MasteryRecord {
 }
 
 // ---------------------------------------------------------------------------
+// Sessions API + socket payloads (Phase 3)
+// ---------------------------------------------------------------------------
+
+/** POST /api/sessions */
+export interface CreateSessionRequest {
+  mode?: Mode;
+  expert?: { name: string; role: string };
+  trainee?: { name: string };
+  task?: string;
+  mapId?: string;
+}
+
+/** POST /api/sessions/:id/transcript. The server maps 'user' to expert or trainee by session mode. */
+export interface TranscriptRequest { t: number; role: 'user' | 'agent'; text: string }
+
+/** POST /api/sessions/:id/frames */
+export interface FrameUploadRequest { t: number; jpegBase64: string }
+export interface FrameUploadResponse { frameId: string }
+
+/** POST /api/sessions/:id/events (debug drawer: inject a fake screen event). */
+export type DebugEventRequest = Pick<ScreenEvent, 'kind' | 'description'> &
+  Partial<Pick<ScreenEvent, 'entity' | 'field' | 'from' | 'to' | 't'>>;
+
+/** socket `screen_events`: one analysed frame (events may be empty). */
+export interface ScreenEventsMessage {
+  sessionId: string; frameId: string; t: number;
+  screen: string; entity?: string;
+  events: ScreenEvent[];
+  ms: number;                           // vision latency
+}
+
+/** socket `vision_error` */
+export interface VisionErrorMessage { sessionId: string; frameId: string; t: number; error: string }
+
+// ---------------------------------------------------------------------------
 // ElevenLabs client tools (BUILD_PLAN §6). Names and params are case-sensitive:
 // apps/api/scripts/setup-agents.ts registers exactly these, the web app handles them.
 // ---------------------------------------------------------------------------
