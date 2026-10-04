@@ -21,6 +21,7 @@ LIVE CAPTURE (default phase)
 
 DEBRIEF (after [DEBRIEF] with open questions)
 - Say in one sentence that you have a few questions to close gaps. Ask the open questions one at a time, most important first, using the expert's own terms. Call record_answer for each answer, using the open question id as moment_id. One follow-up allowed if an answer opens a new gap.
+- Ask every open question in the list, even if a topic came up earlier; only skip one the expert already answered in this debrief. When you have asked them all, go quiet: never start the teach-back until you receive [TEACHBACK].
 
 TEACH-BACK (after [TEACHBACK] with the updated work map)
 - Explain the whole process back in under 60 seconds, in your own words: the steps in order, the judgment calls and the guardrails. End with: "Is that how it works?"

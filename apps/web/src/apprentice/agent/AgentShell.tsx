@@ -5,11 +5,15 @@ import type {
   AnswerRecordedMessage,
   DebugEventRequest,
   GuardrailKind,
+  MapUpdatedMessage,
   Moment,
   MomentsUpdatedMessage,
+  OpenQuestion,
+  ReadyForTeachbackMessage,
   ScreenEventsMessage,
   Session,
   VisionErrorMessage,
+  WorkMap,
 } from '@apprentice/shared'
 import { DEFAULT_DIFF_THRESHOLD } from '../capture/frameDiff.ts'
 import { useScreenCapture } from '../capture/useScreenCapture.ts'
@@ -19,10 +23,11 @@ import { useLog, type LogEntry, type LogKind } from '../lib/log.ts'
 import { getSocket } from '../lib/socket.ts'
 import { BrainPanel } from '../panels/BrainPanel.tsx'
 import { CapturePanel } from '../panels/CapturePanel.tsx'
+import { DebriefPanel } from '../panels/DebriefPanel.tsx'
 import { DebugDrawer } from '../panels/DebugDrawer.tsx'
 import { LiveFeed } from '../panels/LiveFeed.tsx'
 import { useApprenticeClientTools } from './clientTools.ts'
-import { screenCue, type CueChannel } from './cues.ts'
+import { debriefCue, screenCue, teachbackCue, workMapDraftCue, type CueChannel } from './cues.ts'
 import { RULES } from './momentRules.ts'
 import { useMomentDetector, type VoiceSignal } from './useMomentDetector.ts'
 import '../apprentice.css'
@@ -34,6 +39,7 @@ const FEED_KINDS = new Set<LogKind>(['expert', 'agent', 'screen', 'answer', 'err
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
 const OFF_RECORD_PHRASE = /\boff the record\b/i
 type OffRecordSource = 'agent' | 'phrase' | 'button'
+type Phase = 'capture' | 'drafting' | 'debrief'
 
 /** Window B. The ElevenLabs provider wraps everything so any panel can reach the conversation. */
 export function AgentShell() {
@@ -59,6 +65,12 @@ function ApprenticeApp() {
   const [offRecord, setOffRecord] = useState<{ from: number } | null>(null)
   const offRecordRef = useRef(false)
   const goOffRecordRef = useRef<(source: OffRecordSource) => void>(() => {})
+  const [phase, setPhase] = useState<Phase>('capture')
+  const phaseRef = useRef<Phase>('capture')
+  phaseRef.current = phase
+  const [map, setMap] = useState<WorkMap | null>(null)
+  const compactRef = useRef('')
+  const teachbackSent = useRef(false)
   const now = useNow(1000)
 
   useEffect(() => {
@@ -131,6 +143,7 @@ function ApprenticeApp() {
 
   const detector = useMomentDetector({
     sessionId: session?.id,
+    enabled: phase === 'capture',
     expertName: EXPERT.name,
     connected,
     agentSpeaking: mode === 'speaking',
@@ -148,6 +161,13 @@ function ApprenticeApp() {
       record_answer: (p) => {
         const s = sessionRef.current
         if (!s) return
+        if (phaseRef.current === 'debrief') {
+          // An open-question answer: the server quotes the transcript and folds it into the map.
+          api
+            .mapAnswer(s.id, { questionId: String(p.moment_id ?? ''), reasonQuote: str(p.reason_quote) })
+            .catch((err: Error) => add('info', `Debrief answer not applied: ${err.message}`, tNow()))
+          return
+        }
         if (!detector.acceptAnswer()) {
           add('info', `Ignored record_answer before ${EXPERT.name} answered (agent jumped ahead)`, tNow())
           return
@@ -163,6 +183,18 @@ function ApprenticeApp() {
           .catch((err: Error) => add('error', `Answer not saved: ${err.message}`, tNow()))
       },
       go_off_record: () => goOffRecordRef.current('agent'),
+      submit_correction: (p) => {
+        const s = sessionRef.current
+        if (!s) return
+        api
+          .mapCorrection(s.id, { correction: String(p.correction ?? '') })
+          .catch((err: Error) => add('error', `Correction not applied: ${err.message}`, tNow()))
+      },
+      confirm_teachback: () => {
+        const s = sessionRef.current
+        if (!s) return
+        api.mapConfirm(s.id).catch((err: Error) => add('error', `Confirmation not saved: ${err.message}`, tNow()))
+      },
     },
     (name, toolParams) => add('tool', `${name} ${JSON.stringify(toolParams)}`, tNow()),
   )
@@ -191,9 +223,23 @@ function ApprenticeApp() {
     }
     socket.on('screen_events', onScreenEvents)
     socket.on('vision_error', onVisionError)
+    const onMap = (m: MapUpdatedMessage) => {
+      if (m.sessionId !== sessionRef.current?.id) return
+      setMap(m.map)
+      compactRef.current = m.compact
+    }
+    const onReady = (m: ReadyForTeachbackMessage) => {
+      if (m.sessionId !== sessionRef.current?.id || teachbackSent.current) return
+      compactRef.current = m.compact
+      startTeachbackRef.current()
+    }
     socket.on('moments_updated', onMoments)
     socket.on('answer_recorded', onAnswer)
+    socket.on('map_updated', onMap)
+    socket.on('ready_for_teachback', onReady)
     return () => {
+      socket.off('map_updated', onMap)
+      socket.off('ready_for_teachback', onReady)
       socket.off('screen_events', onScreenEvents)
       socket.off('vision_error', onVisionError)
       socket.off('moments_updated', onMoments)
@@ -219,6 +265,9 @@ function ApprenticeApp() {
       detector.reset()
       offRecordRef.current = false
       setOffRecord(null)
+      setPhase('capture')
+      setMap(null)
+      teachbackSent.current = false
       add('info', `Session ${s.id} started`, 0)
       startSession({
         agentId: INTERVIEWER_AGENT_ID,
@@ -282,6 +331,52 @@ function ApprenticeApp() {
       .catch((err: Error) => add('error', `Could not go back on the record: ${err.message}`, to))
   }
 
+  /** Phase 6: stop capturing, build the Work Map, then the agent debriefs the open questions. */
+  const doneWithTask = async () => {
+    const s = sessionRef.current
+    if (!s) return
+    capture.stop()
+    setPhase('drafting')
+    add('info', 'Capture finished: building the Work Map', tNow())
+    try {
+      const { map: draft, compact } = await api.mapDraft(s.id)
+      setMap(draft)
+      compactRef.current = compact
+      setPhase('debrief')
+      add('info', `Work Map drafted: ${draft.steps.length} steps, ${draft.guardrails.length} guardrails, ${draft.openQuestions.length} open questions`, tNow())
+      if (!connectedRef.current) {
+        add('info', 'Agent not connected: answer or skip the questions in the panel', tNow())
+        return
+      }
+      sendContextualUpdate(workMapDraftCue(compact))
+      const cue = debriefCue(draft, EXPERT.name)
+      sendUserMessage(cue)
+      add('cue', cue, tNow())
+    } catch (err) {
+      setPhase('capture')
+      add('error', `Work Map not built: ${(err as Error).message}`, tNow())
+    }
+  }
+
+  const startTeachback = () => {
+    teachbackSent.current = true
+    if (!connectedRef.current) {
+      add('info', 'Agent not connected: no teach-back', tNow())
+      return
+    }
+    const cue = teachbackCue(compactRef.current, EXPERT.name)
+    sendUserMessage(cue)
+    add('cue', cue, tNow())
+  }
+  const startTeachbackRef = useRef(startTeachback)
+  startTeachbackRef.current = startTeachback
+
+  const skipQuestion = (q: OpenQuestion) => {
+    const s = sessionRef.current
+    if (!s) return
+    api.mapAnswer(s.id, { questionId: q.id, skip: true }).catch((err: Error) => add('error', `Skip failed: ${err.message}`, tNow()))
+  }
+
   const strike = (entry: LogEntry) => {
     const s = sessionRef.current
     if (!s || !entry.ref) return
@@ -329,6 +424,12 @@ function ApprenticeApp() {
           <span className={`status status-${status}`}>
             {status === 'connected' ? (mode === 'speaking' ? 'Speaking' : 'Listening') : status}
           </span>
+          {session && phase === 'capture' && !offRecord && (
+            <button type="button" className="appr-btn" onClick={() => void doneWithTask()}>
+              Done with task
+            </button>
+          )}
+          {phase === 'drafting' && <span className="appr-small">Building the Work Map…</span>}
           {session && !offRecord && (
             <button type="button" className="appr-btn appr-btn-danger" onClick={() => goOffRecord('button')}>
               Off the record
@@ -367,9 +468,14 @@ function ApprenticeApp() {
         </div>
       )}
 
-      <BrainPanel brain={detector.brain} moments={moments} expertName={EXPERT.name} />
+      {map && phase === 'debrief' && (
+        <DebriefPanel map={map} expertName={EXPERT.name} onSkip={skipQuestion} onStartTeachback={startTeachback} />
+      )}
 
-      <CapturePanel
+      {phase === 'capture' && <BrainPanel brain={detector.brain} moments={moments} expertName={EXPERT.name} />}
+
+      {phase === 'capture' && (
+        <CapturePanel
         sessionId={session?.id}
         sharing={capture.sharing}
         stream={capture.stream}
@@ -381,7 +487,8 @@ function ApprenticeApp() {
         lastVision={lastVision}
         onShare={share}
         onStopSharing={capture.stop}
-      />
+        />
+      )}
 
       <section className="appr-card">
         <h2>Live feed</h2>

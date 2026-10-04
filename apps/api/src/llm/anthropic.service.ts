@@ -10,6 +10,8 @@ export interface CallToolOptions {
   content: string | ContentBlock[];
   tool: ToolDef;
   maxTokens?: number;
+  /** Thinking depth on models that support it (Sonnet/Opus 5.x); leave unset for Haiku. */
+  effort?: 'low' | 'medium' | 'high';
 }
 
 // These models reject forced tool_choice ({type:'tool'}) with a 400, so they get
@@ -39,7 +41,7 @@ export class AnthropicService {
   }
 
   /** One call that must answer through `tool`; returns the tool input as T. */
-  async callTool<T>({ model, system, content, tool, maxTokens = 16000 }: CallToolOptions): Promise<T> {
+  async callTool<T>({ model, system, content, tool, maxTokens = 16000, effort }: CallToolOptions): Promise<T> {
     const forced = AnthropicService.forcesToolChoice(model);
     const fallback = SERVER_FALLBACK.has(model);
 
@@ -51,6 +53,7 @@ export class AnthropicService {
         tools: [tool],
         tool_choice: forced ? { type: 'tool', name: tool.name } : { type: 'auto' },
         messages: [{ role: 'user', content }],
+        ...(effort ? { output_config: { effort } } : {}),
         ...(fallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
       });
 

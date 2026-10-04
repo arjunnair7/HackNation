@@ -1,4 +1,4 @@
-import type { Moment, ScreenEvent } from '@apprentice/shared'
+import type { Moment, ScreenEvent, WorkMap } from '@apprentice/shared'
 import { formatT } from '../lib/clock.ts'
 
 /** Contextual update for one screen event: "[SCREEN 03:12] Cost center on INV-4471 changed 4711 → 0400". */
@@ -25,6 +25,32 @@ export function askNowReminder(candidates: Moment[], expertName: string): string
   return `[ASK_NOW] Reminder: ${expertName} is still waiting quietly. Ask your one question about these moments now, out loud.\n${candidates
     .map((c) => `- id=${c.id} (${c.suggestedType}) ${c.summary}`)
     .join('\n')}`
+}
+
+/** Contextual update right after the map is drafted, so the agent knows what it learned. */
+export function workMapDraftCue(compact: string): string {
+  return `[WORK_MAP_DRAFT] ${compact}`
+}
+
+/** [DEBRIEF] with the open questions; the instruction rides inside, as with [ASK_NOW]. */
+export function debriefCue(map: WorkMap, expertName: string): string {
+  const open = map.openQuestions.filter((q) => q.status === 'open')
+  return (
+    `[DEBRIEF] ${expertName} has finished the task. Say in one sentence that you have a few questions to close gaps, ` +
+    'then ask them one at a time, out loud, most important first. After each answer call record_answer with that ' +
+    `question's id as moment_id. Ask every question in the list, even if the topic came up earlier. When all are ` +
+    `asked, go quiet and wait: the app sends [TEACHBACK] when it is time to explain back. Do not call skip_turn now.` +
+    `\nOpen questions:\n${open.map((q) => `- id=${q.id} ${q.question}`).join('\n')}`
+  )
+}
+
+/** [TEACHBACK] with the updated map. */
+export function teachbackCue(compact: string, expertName: string): string {
+  return (
+    `[TEACHBACK] All open questions are closed. Explain the whole process back to ${expertName} now, out loud, in under ` +
+    '60 seconds and in your own words: the steps in order, the judgment calls and the guardrails. End with: ' +
+    `"Is that how it works?" Do not call skip_turn.\n\n${compact}`
+  )
 }
 
 export type CueChannel = 'message' | 'context'

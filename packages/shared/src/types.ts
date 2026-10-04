@@ -157,6 +157,25 @@ export interface MomentsUpdatedMessage { sessionId: string; moments: Moment[] }
 export interface AnswerRecordedMessage { sessionId: string; answer: Answer }
 
 // ---------------------------------------------------------------------------
+// Work Map API (Phase 6)
+// ---------------------------------------------------------------------------
+
+/** POST /api/sessions/:id/map/draft; compact is renderCompact(map), the text the agent gets. */
+export interface MapDraftResponse { map: WorkMap; compact: string }
+
+/** POST /api/sessions/:id/map/answer (record_answer with an open-question id, or the Skip button). */
+export interface MapAnswerRequest { questionId: string; reasonQuote?: string; skip?: boolean }
+
+/** POST /api/sessions/:id/map/correction (submit_correction during the teach-back). */
+export interface MapCorrectionRequest { correction: string }
+
+/** socket `map_updated` */
+export interface MapUpdatedMessage { sessionId: string; map: WorkMap; compact: string }
+
+/** socket `ready_for_teachback`: every open question is answered or skipped. */
+export interface ReadyForTeachbackMessage { sessionId: string; map: WorkMap; compact: string }
+
+// ---------------------------------------------------------------------------
 // ElevenLabs client tools (BUILD_PLAN §6). Names and params are case-sensitive:
 // apps/api/scripts/setup-agents.ts registers exactly these, the web app handles them.
 // ---------------------------------------------------------------------------

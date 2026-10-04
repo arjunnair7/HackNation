@@ -488,6 +488,123 @@ body:has(.appr) {
   color: var(--a-muted);
 }
 
+/* --- debrief ------------------------------------------------------------------ */
+
+.done-badge {
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(76, 195, 138, 0.18);
+  color: var(--a-ok);
+  font-weight: 800;
+}
+
+.done-hint {
+  margin: -4px 0 10px;
+  font-size: 13px;
+  color: var(--a-warn);
+}
+
+.questions,
+.map-steps,
+.map-guardrails {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.question {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 8px;
+  align-items: start;
+  padding: 7px 0;
+  border-bottom: 1px solid #1f2733;
+}
+
+.question-mark {
+  font-weight: 800;
+  color: var(--a-muted);
+}
+
+.question-answered .question-mark {
+  color: var(--a-ok);
+}
+
+.question-skipped {
+  opacity: 0.6;
+}
+
+.question-answer {
+  margin-top: 2px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--a-ok);
+}
+
+.coverage {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.coverage-bar div {
+  background: var(--a-ok);
+}
+
+.teachback {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--a-line);
+  border-radius: 6px;
+}
+
+.teachback strong {
+  display: block;
+}
+
+.tb-confirmed {
+  color: var(--a-ok);
+}
+
+.tb-corrected {
+  color: var(--a-warn);
+}
+
+.map-steps {
+  counter-reset: step;
+}
+
+.map-steps li,
+.map-guardrails li {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border-bottom: 1px solid #1f2733;
+}
+
+.map-steps li::before {
+  counter-increment: step;
+  content: counter(step) '. ';
+  color: var(--a-muted);
+}
+
+@keyframes flash {
+  from {
+    background: rgba(90, 162, 255, 0.28);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+.flash {
+  animation: flash 2.5s ease-out;
+}
+
 /* --- debug ------------------------------------------------------------------ */
 
 .debug summary {

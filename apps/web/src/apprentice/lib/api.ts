@@ -4,6 +4,9 @@ import type {
   DebugEventRequest,
   FrameUploadRequest,
   FrameUploadResponse,
+  MapAnswerRequest,
+  MapCorrectionRequest,
+  MapDraftResponse,
   Moment,
   MomentStatusRequest,
   OffRecordRequest,
@@ -13,6 +16,7 @@ import type {
   StrikeRequest,
   TranscriptRequest,
   Utterance,
+  WorkMap,
 } from '@apprentice/shared'
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -41,5 +45,9 @@ export const api = {
     post<Moment[]>(`/sessions/${sessionId}/moments/status`, body),
   offRecord: (sessionId: string, body: OffRecordRequest) => post<Session['offRecord']>(`/sessions/${sessionId}/off-record`, body),
   strike: (sessionId: string, body: StrikeRequest) => post<string[]>(`/sessions/${sessionId}/strike`, body),
+  mapDraft: (sessionId: string) => post<MapDraftResponse>(`/sessions/${sessionId}/map/draft`, {}),
+  mapAnswer: (sessionId: string, body: MapAnswerRequest) => post<WorkMap>(`/sessions/${sessionId}/map/answer`, body),
+  mapCorrection: (sessionId: string, body: MapCorrectionRequest) => post<WorkMap>(`/sessions/${sessionId}/map/correction`, body),
+  mapConfirm: (sessionId: string) => post<WorkMap>(`/sessions/${sessionId}/map/confirm`, {}),
   frameUrl: (sessionId: string, frameId: string) => `/api/sessions/${sessionId}/frames/${frameId}`,
 }

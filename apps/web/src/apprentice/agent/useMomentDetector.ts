@@ -14,6 +14,7 @@ export interface VoiceSignal {
 
 export interface MomentDetectorOptions {
   sessionId?: string
+  enabled: boolean // only during capture
   expertName: string
   connected: boolean
   agentSpeaking: boolean
@@ -49,6 +50,10 @@ export function useMomentDetector(options: MomentDetectorOptions) {
     const timer = setInterval(() => {
       const o = opts.current
       const now = Date.now()
+      if (!o.enabled) {
+        awaiting.current = null
+        return
+      }
 
       const lastScreenChangeAt = o.lastScreenChangeAt.current ?? 0
       const voice = o.voice.current ?? { level: 0, lastAboveAt: 0, seen: false }
