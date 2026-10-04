@@ -9,6 +9,17 @@ export const QUEUE_LABEL: Record<ErpQueue, string> = {
   trainee: "Lena's queue",
 }
 
+/** Sidebar status views (/erp?status=…). */
+export const STATUS_VIEWS = [
+  { status: 'posted', label: 'Posted' },
+  { status: 'on_hold', label: 'On hold' },
+  { status: 'routed', label: 'Routed' },
+] as const
+export type StatusView = (typeof STATUS_VIEWS)[number]['status']
+
+/** The sandbox's "today" (BUILD_PLAN §5), for "due this week". */
+export const SANDBOX_TODAY = '2026-12-10'
+
 export function parseQueue(value: string | null): ErpQueue {
   return value === 'trainee' ? 'trainee' : 'expert'
 }

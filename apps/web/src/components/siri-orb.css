@@ -1,0 +1,109 @@
+/* Siri-style orb. Lives outside .erp, whose "no animations" rule protects vision; capture masks it. */
+.orb-wrap {
+  --size: 64px;
+  --level: 0;
+  --speed: 9s;
+  width: var(--size);
+  height: var(--size);
+  flex: none;
+}
+
+.orb {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 60%, #1b2140 0%, #070a16 70%);
+  box-shadow:
+    0 0 calc(var(--size) * (0.15 + var(--level) * 0.45)) rgba(120, 140, 255, calc(0.35 + var(--level) * 0.5)),
+    inset 0 0 calc(var(--size) * 0.12) rgba(255, 255, 255, 0.08);
+  isolation: isolate;
+}
+
+.orb-pulse {
+  position: absolute;
+  inset: 0;
+  transform: scale(calc(0.78 + var(--level) * 0.38));
+  transition: transform 90ms linear;
+}
+
+.orb-blob {
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  filter: blur(calc(var(--size) * 0.09));
+  mix-blend-mode: screen;
+  opacity: 0.95;
+  animation: orb-spin var(--speed) linear infinite;
+}
+
+.orb-blob-1 {
+  background: radial-gradient(circle at 30% 30%, #3b82f6 0%, transparent 62%);
+}
+
+.orb-blob-2 {
+  background: radial-gradient(circle at 70% 35%, #a855f7 0%, transparent 60%);
+  animation-duration: calc(var(--speed) * 1.35);
+  animation-direction: reverse;
+}
+
+.orb-blob-3 {
+  background: radial-gradient(circle at 45% 75%, #ec4899 0%, transparent 58%);
+  animation-duration: calc(var(--speed) * 0.8);
+}
+
+.orb-blob-4 {
+  background: radial-gradient(circle at 65% 70%, #22d3ee 0%, transparent 55%);
+  animation-duration: calc(var(--speed) * 1.7);
+  animation-direction: reverse;
+}
+
+.orb-core {
+  position: absolute;
+  inset: 34%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, calc(0.55 + var(--level) * 0.4)) 0%, transparent 70%);
+  filter: blur(calc(var(--size) * 0.04));
+}
+
+@keyframes orb-spin {
+  from {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.12);
+  }
+  to {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+.orb-idle {
+  --speed: 14s;
+}
+
+.orb-listening {
+  --speed: 7s;
+}
+
+.orb-speaking {
+  --speed: 2.6s;
+}
+
+.orb-off .orb-blob,
+.orb-off_record .orb-blob {
+  animation-play-state: paused;
+  filter: blur(calc(var(--size) * 0.09)) grayscale(1);
+  opacity: 0.35;
+}
+
+.orb-off_record .orb {
+  box-shadow: 0 0 calc(var(--size) * 0.25) rgba(255, 90, 90, 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb-blob {
+    animation-duration: calc(var(--speed) * 4);
+  }
+}

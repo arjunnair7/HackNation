@@ -5,13 +5,18 @@
  */
 .erp {
   --ink: #0b1220;
-  --ink-2: #344052;
-  --line: #b6bfcc;
-  --line-soft: #dde2e9;
-  --bg: #ffffff;
-  --panel: #f4f6f9;
-  --bar: #10294a;
-  --accent: #0a4fa3;
+  --ink-2: #3a4658;
+  --ink-3: #5b6677;
+  --line: #c3cbd7;
+  --line-soft: #e3e8ef;
+  --bg: #f3f5f9;
+  --card: #ffffff;
+  --side: #0f1b2d;
+  --side-2: #1a2a42;
+  --side-ink: #e8eef7;
+  --side-muted: #9fb0c8;
+  --accent: #1f56d1;
+  --accent-soft: #e8effc;
   --focus: #f0b400;
   --ok: #0b6b2f;
   --ok-bg: #e2f3e7;
@@ -21,11 +26,13 @@
   --route-bg: #ece6fa;
   --danger: #9b1c1c;
   --danger-bg: #fde8e8;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(15, 27, 45, 0.06), 0 1px 3px rgba(15, 27, 45, 0.08);
 
   color-scheme: light;
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
   background: var(--bg);
   color: var(--ink);
   font: 17px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -44,70 +51,185 @@
   outline-offset: 1px;
 }
 
-/* --- chrome ------------------------------------------------------------ */
+/* --- sidebar ----------------------------------------------------------- */
 
-.erp-topbar {
+.erp-side {
+  position: sticky;
+  top: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 12px 24px;
-  background: var(--bar);
-  color: #ffffff;
-  font-size: 16px;
-  font-weight: 600;
+  flex-direction: column;
+  height: 100vh;
+  /* bottom space is the orb's box (.erp-orb), which sits over it */
+  padding: 18px 14px 96px;
+  overflow-y: auto;
+  background: var(--side);
+  color: var(--side-ink);
 }
 
 .erp-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  padding: 2px 8px 18px;
+  border-bottom: 1px solid var(--side-2);
+}
+
+.erp-brand > span:last-child {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.erp-brand strong {
   font-size: 17px;
-  font-weight: 700;
+}
+
+.erp-brand strong + span {
+  font-size: 13px;
+  color: var(--side-muted);
 }
 
 .erp-logo {
   display: inline-grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 4px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 15px;
+}
+
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.side-title {
+  padding: 16px 10px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--side-muted);
+}
+
+.erp a.side-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: var(--side-ink);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.erp a.side-link:hover {
+  background: var(--side-2);
+}
+
+.erp a.side-link svg {
+  flex: none;
+  color: var(--side-muted);
+}
+
+.erp a.side-link.side-active {
   background: #ffffff;
-  color: var(--bar);
+  color: var(--side);
+}
+
+.erp a.side-link.side-active svg {
+  color: var(--accent);
+}
+
+.side-link span:nth-of-type(1) {
+  flex: 1;
+  min-width: 0;
+}
+
+.side-count {
+  min-width: 28px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--side-2);
+  color: var(--side-ink);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
+  text-align: center;
+}
+
+.side-active .side-count {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.side-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--side-2);
+  border-radius: 8px;
+  background: none;
+  color: var(--side-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.side-reset:hover {
+  color: var(--side-ink);
+}
+
+/* --- top bar / main ---------------------------------------------------- */
+
+.erp-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.erp-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 12px 28px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--card);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.period-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.erp-clock {
+  color: var(--ink-2);
 }
 
 .erp-main {
   flex: 1;
   width: 100%;
-  max-width: 1240px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 16px 24px 32px;
-}
-
-.erp-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 18px;
-  padding: 8px 24px;
-  border-top: 1px solid var(--line-soft);
-  font-size: 13px;
-  color: #5b6574;
-}
-
-.erp-footer a,
-.linkish {
-  color: inherit;
-}
-
-button.linkish {
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  text-decoration: underline;
-  cursor: pointer;
+  padding: 20px 28px 28px;
 }
 
 /* --- typography / shared ---------------------------------------------- */
@@ -116,10 +238,11 @@ button.linkish {
   margin: 0;
   font-size: 28px;
   font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .erp h2 {
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   font-size: 18px;
   font-weight: 700;
 }
@@ -128,7 +251,7 @@ button.linkish {
   color: var(--accent);
 }
 
-.muted {
+.erp .muted {
   color: var(--ink-2);
 }
 
@@ -147,45 +270,72 @@ button.linkish {
 }
 
 .crumbs {
-  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
   font-size: 16px;
   font-weight: 600;
 }
 
-.panel {
-  margin-bottom: 16px;
-  padding: 14px 18px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #ffffff;
+.erp-page > .crumbs {
+  margin-bottom: 10px;
 }
 
-.panel-coding {
-  background: var(--panel);
+.erp .crumbs a {
+  text-decoration: none;
 }
 
-.panel-head {
+.crumb-sep,
+.crumb-muted {
+  color: var(--ink-3);
+}
+
+.topbar-right {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  align-items: center;
+  gap: 18px;
+  flex: none;
 }
 
-.erp .panel-head h2 {
-  margin: 0;
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.page-head p {
+  margin: 4px 0 0;
+}
+
+.card {
+  margin-bottom: 18px;
+  padding: 18px 22px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.code {
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--bg);
+  font-weight: 600;
 }
 
 /* label next to value */
 .fields {
   display: grid;
-  grid-template-columns: 150px 1fr;
-  gap: 8px 16px;
+  grid-template-columns: 140px 1fr;
+  gap: 10px 16px;
   margin: 0;
 }
 
 .fields-2col {
-  grid-template-columns: 150px 1fr 150px 1fr;
+  grid-template-columns: 140px 1fr 140px 1fr;
 }
 
 .fields dt {
@@ -198,6 +348,37 @@ button.linkish {
   font-weight: 600;
 }
 
+/* --- KPIs -------------------------------------------------------------- */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 20px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.kpi span {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.kpi strong {
+  font-size: 28px;
+  font-weight: 800;
+}
+
 /* --- tables ------------------------------------------------------------ */
 
 .table {
@@ -207,18 +388,24 @@ button.linkish {
 }
 
 .table th {
-  padding: 8px 10px;
-  border-bottom: 2px solid var(--line);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
   text-align: left;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--ink-2);
 }
 
 .table td {
-  padding: 11px 10px;
+  padding: 12px;
   border-bottom: 1px solid var(--line-soft);
   vertical-align: top;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .table tfoot td {
@@ -231,8 +418,26 @@ button.linkish {
   white-space: nowrap;
 }
 
+.table-card {
+  padding: 6px 10px;
+}
+
+.table-card .empty {
+  margin: 0;
+  padding: 18px 12px;
+}
+
 .queue-table td {
-  padding: 14px 10px;
+  padding: 15px 12px;
+  vertical-align: middle;
+}
+
+.queue-table td.strong a {
+  text-decoration: none;
+}
+
+.queue-table .muted-cell {
+  color: var(--ink-2);
 }
 
 .queue-table tr.clickable {
@@ -240,35 +445,32 @@ button.linkish {
 }
 
 .queue-table tr.clickable:hover td {
-  background: #eef3fa;
-}
-
-.list-head {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.list-head p {
-  margin: 0;
+  background: #f1f5fd;
 }
 
 /* --- chips / badges / banners ----------------------------------------- */
 
 .chip {
-  display: inline-block;
-  padding: 2px 10px;
-  border: 1.5px solid currentColor;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 11px;
   border-radius: 999px;
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
 }
 
+.chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 .chip-open {
   color: var(--accent);
-  background: #e7effa;
+  background: var(--accent-soft);
 }
 
 .chip-posted {
@@ -286,12 +488,13 @@ button.linkish {
   background: var(--route-bg);
 }
 
+/* Deliberately subtle (BUILD_PLAN §5). */
 .badge-muted {
   display: inline-block;
   margin-left: 8px;
   padding: 0 6px;
   border: 1px solid #d9dde3;
-  border-radius: 3px;
+  border-radius: 4px;
   background: #f1f3f5;
   color: #6b7280;
   font-size: 12px;
@@ -301,9 +504,9 @@ button.linkish {
 
 .banner {
   margin-bottom: 12px;
-  padding: 12px 14px;
+  padding: 12px 16px;
   border: 2px solid;
-  border-radius: 4px;
+  border-radius: 10px;
   font-weight: 600;
 }
 
@@ -317,10 +520,15 @@ button.linkish {
 /* --- invoice detail ---------------------------------------------------- */
 
 .inv-head {
+  padding: 18px 22px 8px;
+}
+
+.inv-head-top {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: end;
   gap: 4px 24px;
+  padding-bottom: 10px;
 }
 
 .inv-title {
@@ -331,7 +539,7 @@ button.linkish {
 
 .erp h1.inv-id {
   font-size: 30px;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
 }
 
 .inv-supplier {
@@ -352,23 +560,32 @@ button.linkish {
 }
 
 .inv-amount .amount {
-  font-size: 30px;
+  font-size: 32px;
   font-weight: 800;
+}
+
+.lines-table th:first-child,
+.lines-table td:first-child {
+  padding-left: 0;
+}
+
+.lines-table th:last-child,
+.lines-table td:last-child {
+  padding-right: 0;
 }
 
 .tabs {
   display: flex;
-  gap: 4px;
-  margin: 14px 0 14px;
-  border-bottom: 2px solid var(--line);
+  gap: 6px;
+  margin: 0 0 16px;
+  border-bottom: 1px solid var(--line);
 }
 
 .tab {
-  margin-bottom: -2px;
-  padding: 10px 18px;
-  border: 2px solid transparent;
-  border-bottom: 0;
-  border-radius: 4px 4px 0 0;
+  margin-bottom: -1px;
+  padding: 10px 16px;
+  border: 0;
+  border-bottom: 3px solid transparent;
   background: none;
   color: var(--ink-2);
   font: inherit;
@@ -377,20 +594,18 @@ button.linkish {
 }
 
 .tab[aria-selected='true'] {
-  border-color: var(--line);
-  background: #ffffff;
+  border-bottom-color: var(--accent);
   color: var(--ink);
-  box-shadow: 0 2px 0 #ffffff;
 }
 
 .inv-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 460px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 18px;
   align-items: start;
 }
 
-@media (max-width: 1000px) {
+@media (max-width: 1100px) {
   .inv-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -398,9 +613,13 @@ button.linkish {
 
 /* --- coding form ------------------------------------------------------- */
 
+.card-coding {
+  border-color: #c9d7f4;
+}
+
 .form-row {
   display: grid;
-  grid-template-columns: 120px 1fr;
+  grid-template-columns: 124px 1fr;
   gap: 12px;
   align-items: start;
   margin-bottom: 12px;
@@ -421,7 +640,7 @@ button.linkish {
   width: 100%;
   padding: 8px 10px;
   border: 2px solid #6b7686;
-  border-radius: 4px;
+  border-radius: 8px;
   background: #ffffff;
   color: var(--ink);
   font: inherit;
@@ -442,27 +661,57 @@ button.linkish {
 
 .save-state {
   font-size: 14px;
+  font-weight: 600;
   color: var(--ink-2);
 }
 
 .save-error {
   color: var(--danger);
-  font-weight: 600;
 }
 
-/* --- actions ----------------------------------------------------------- */
+/* --- sticky action bar ------------------------------------------------- */
+
+.action-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 4;
+  margin-top: 2px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: 0 -2px 14px rgba(15, 27, 45, 0.1), 0 6px 18px rgba(15, 27, 45, 0.12);
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.action-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.action-info .hint {
+  margin: 0;
+}
 
 .action-buttons {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .btn {
   display: inline-block;
-  padding: 10px 12px;
+  padding: 10px 16px;
   border: 2px solid var(--ink);
-  border-radius: 4px;
+  border-radius: 8px;
   background: #ffffff;
   color: var(--ink);
   font: inherit;
@@ -491,22 +740,24 @@ button.linkish {
   position: relative;
 }
 
+/* opens upward: the bar sits at the bottom of the window */
 .menu {
   position: absolute;
-  top: calc(100% + 4px);
+  bottom: calc(100% + 6px);
   left: 0;
   z-index: 10;
   min-width: 100%;
+  overflow: hidden;
   border: 2px solid var(--ink);
-  border-radius: 4px;
+  border-radius: 8px;
   background: #ffffff;
-  box-shadow: 0 4px 12px rgba(11, 18, 32, 0.18);
+  box-shadow: 0 6px 18px rgba(11, 18, 32, 0.2);
 }
 
 .menu button {
   display: block;
   width: 100%;
-  padding: 10px 14px;
+  padding: 11px 14px;
   border: 0;
   border-bottom: 1px solid var(--line-soft);
   background: #ffffff;
@@ -522,14 +773,15 @@ button.linkish {
 }
 
 .menu button:hover {
-  background: var(--panel);
+  background: var(--bg);
 }
 
 .outcome {
-  margin-bottom: 14px;
-  padding: 12px 14px;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
   border-left: 5px solid;
-  border-radius: 4px;
+  border-radius: 8px;
 }
 
 .outcome strong {
@@ -550,4 +802,27 @@ button.linkish {
 .outcome-routed {
   border-color: var(--route);
   background: var(--route-bg);
+}
+
+/* --- the apprentice's orb (outside .erp, masked out of capture) --------- */
+
+.erp-orb {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 232px; /* inside the 248px sidebar even with the capture mask's padding */
+  height: 80px;
+  padding: 0 18px;
+  overflow: hidden; /* keeps the orb's glow inside the masked box */
+  pointer-events: none;
+  color: #e8eef7;
+  font: 600 14px/1.3 system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.erp-orb-off_record {
+  color: #ffb4b4;
 }

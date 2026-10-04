@@ -8,11 +8,10 @@ import type {
   InvoiceDraft,
 } from '@apprentice/shared'
 import { Field, StatusChip, VendorBadge } from './components.tsx'
-import { erpApi } from './erpApi.ts'
+import { announceErpChange, erpApi } from './erpApi.ts'
 import {
   CATEGORY_LABEL,
   HISTORY_STATUS_LABEL,
-  QUEUE_LABEL,
   ROUTE_LABEL,
   countryLabel,
   formatDate,
@@ -122,6 +121,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
         setDetail(result.detail)
         setDraft(result.detail.draft)
         setBlocked(null)
+        announceErpChange()
       } else {
         setBlocked(result.blocked.guardrail)
       }
@@ -153,25 +153,50 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
 
   return (
     <div className="erp-page">
-      <nav className="crumbs">
-        <Link to={`/erp?queue=${invoice.queue}`}>← {QUEUE_LABEL[invoice.queue]}</Link>
-      </nav>
-
-      <header className="inv-head">
-        <div>
-          <div className="inv-title">
-            <h1 className="inv-id">{invoice.id}</h1>
-            <StatusChip status={detail.status} routeTo={detail.draft.routeTo} />
+      {/* The document itself: who, how much, what for. Stays in view on both tabs. */}
+      <header className="card inv-head">
+        <div className="inv-head-top">
+          <div>
+            <div className="inv-title">
+              <h1 className="inv-id">{invoice.id}</h1>
+              <StatusChip status={detail.status} routeTo={detail.draft.routeTo} />
+            </div>
+            <div className="inv-supplier">
+              {supplier.name}
+              {!supplier.known && <VendorBadge />}
+            </div>
           </div>
-          <div className="inv-supplier">
-            {supplier.name}
-            {!supplier.known && <VendorBadge />}
+          <div className="inv-amount">
+            <span className="label-sm">Amount</span>
+            <span className="amount">{formatEur(invoice.amount)}</span>
           </div>
         </div>
-        <div className="inv-amount">
-          <span className="label-sm">Amount</span>
-          <span className="amount">{formatEur(invoice.amount)}</span>
-        </div>
+        <table className="table lines-table">
+          <thead>
+            <tr>
+              <th>Line item</th>
+              <th>PO</th>
+              <th>Asset no.</th>
+              <th className="num">Qty</th>
+              <th className="num">Unit price</th>
+              <th className="num">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoice.lines.map((line, i) => (
+              <tr key={i}>
+                <td>{line.description}</td>
+                <td>{line.poNumber ?? '—'}</td>
+                <td>{line.assetNumber ?? '—'}</td>
+                <td className="num">
+                  {line.quantity} {line.unit}
+                </td>
+                <td className="num">{formatEur(line.unitPrice)}</td>
+                <td className="num strong">{formatEur(line.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </header>
 
       <div className="tabs" role="tablist">
@@ -186,9 +211,9 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
       {tab === 'history' ? (
         <SupplierHistory detail={detail} />
       ) : (
-        <div className="inv-grid">
-          <div>
-            <section className="panel">
+        <>
+          <div className="inv-grid">
+            <section className="card">
               <h2>Invoice details</h2>
               <dl className="fields">
                 <Field label="Supplier">
@@ -205,51 +230,8 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
               </dl>
             </section>
 
-            <section className="panel">
-              <h2>Line items</h2>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Description</th>
-                    <th>PO</th>
-                    <th>Asset no.</th>
-                    <th className="num">Qty</th>
-                    <th className="num">Unit price</th>
-                    <th className="num">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoice.lines.map((line, i) => (
-                    <tr key={i}>
-                      <td>{line.description}</td>
-                      <td>{line.poNumber ?? '—'}</td>
-                      <td>{line.assetNumber ?? '—'}</td>
-                      <td className="num">
-                        {line.quantity} {line.unit}
-                      </td>
-                      <td className="num">{formatEur(line.unitPrice)}</td>
-                      <td className="num strong">{formatEur(line.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan={5} className="num strong">
-                      Total
-                    </td>
-                    <td className="num strong">{formatEur(invoice.amount)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </section>
-          </div>
-
-          <div>
-            <section className="panel panel-coding">
-              <div className="panel-head">
-                <h2>Coding</h2>
-                <span className={`save-state ${autosave.saveState === 'error' ? 'save-error' : ''}`}>{saveLabel}</span>
-              </div>
+            <section className="card card-coding">
+              <h2>Coding</h2>
               <div className="form-row">
                 <label htmlFor="cost-center">Cost center</label>
                 <div>
@@ -292,29 +274,28 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                 />
               </div>
             </section>
+          </div>
 
-            <section className="panel">
-              <h2>Actions</h2>
-              {blocked && (
-                <div className="banner banner-block" role="alert">
-                  <strong>Held by Apprentice:</strong> {blocked.text}
-                </div>
-              )}
-              {actionError && (
-                <div className="banner banner-error" role="alert">
-                  {actionError}
-                </div>
-              )}
-
+          {/* Sticky at the bottom of the window so the decision is always in reach. */}
+          <section className="action-bar" aria-label="Actions">
+            {blocked && (
+              <div className="banner banner-block" role="alert">
+                <strong>Held by Apprentice:</strong> {blocked.text}
+              </div>
+            )}
+            {actionError && (
+              <div className="banner banner-error" role="alert">
+                {actionError}
+              </div>
+            )}
+            <div className="action-row">
               {editable ? (
                 <>
+                  <div className="action-info">
+                    <span className={`save-state${autosave.saveState === 'error' ? ' save-error' : ''}`}>{saveLabel}</span>
+                    <span className="hint">Hold needs a comment.</span>
+                  </div>
                   <div className="action-buttons">
-                    <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void runAction({ action: 'approve' })}>
-                      Approve &amp; post
-                    </button>
-                    <button type="button" className="btn" disabled={busy} onClick={() => void runAction({ action: 'hold' })}>
-                      Hold
-                    </button>
                     <div className="route" ref={routeRef}>
                       <button
                         type="button"
@@ -337,25 +318,30 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                         </div>
                       )}
                     </div>
+                    <button type="button" className="btn" disabled={busy} onClick={() => void runAction({ action: 'hold' })}>
+                      Hold
+                    </button>
+                    <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void runAction({ action: 'approve' })}>
+                      Approve &amp; post
+                    </button>
                   </div>
-                  <p className="hint">Hold needs a comment.</p>
                 </>
               ) : (
                 <>
                   <Outcome detail={detail} />
                   <div className="action-buttons">
-                    <button type="button" className="btn btn-primary" onClick={() => void goToNextInvoice()}>
-                      Next invoice →
-                    </button>
                     <Link className="btn" to={`/erp?queue=${invoice.queue}`}>
                       Back to queue
                     </Link>
+                    <button type="button" className="btn btn-primary" onClick={() => void goToNextInvoice()}>
+                      Next invoice →
+                    </button>
                   </div>
                 </>
               )}
-            </section>
-          </div>
-        </div>
+            </div>
+          </section>
+        </>
       )}
     </div>
   )
@@ -403,7 +389,7 @@ function SupplierHistory({ detail }: { detail: ErpInvoiceDetail }) {
   // Document history first: it's what this tab is opened for, so it should be above the fold.
   return (
     <>
-      <section className="panel">
+      <section className="card">
         <h2>Document history</h2>
         {history.length === 0 ? (
           <p className="muted">No previous documents for this supplier.</p>
@@ -435,7 +421,7 @@ function SupplierHistory({ detail }: { detail: ErpInvoiceDetail }) {
         )}
       </section>
 
-      <section className="panel">
+      <section className="card">
         <h2>Supplier</h2>
         <dl className="fields fields-2col">
           <Field label="Name">{supplier.name}</Field>

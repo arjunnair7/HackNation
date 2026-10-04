@@ -19,6 +19,7 @@ import { DEFAULT_DIFF_THRESHOLD } from '../capture/frameDiff.ts'
 import { useScreenCapture } from '../capture/useScreenCapture.ts'
 import { api } from '../lib/api.ts'
 import { formatT, sessionT, useNow } from '../lib/clock.ts'
+import { erpOrbMasks, openErpWindow, useErpWindow } from '../lib/erpLayout.ts'
 import { useLog, type LogEntry, type LogKind } from '../lib/log.ts'
 import { getSocket } from '../lib/socket.ts'
 import { BrainPanel } from '../panels/BrainPanel.tsx'
@@ -27,7 +28,10 @@ import { DebriefPanel } from '../panels/DebriefPanel.tsx'
 import { WorkMapView } from '../panels/WorkMapView.tsx'
 import { DebugDrawer } from '../panels/DebugDrawer.tsx'
 import { LiveFeed } from '../panels/LiveFeed.tsx'
+import { IntroPage } from '../IntroPage.tsx'
 import { useApprenticeClientTools } from './clientTools.ts'
+import { GetReady } from './GetReady.tsx'
+import { PresenceOrb, presenceLabel } from './PresenceOrb.tsx'
 import { TeachApp } from './TeachApp.tsx'
 import { debriefCue, screenCue, teachbackCue, workMapDraftCue, type CueChannel } from './cues.ts'
 import { RULES } from './momentRules.ts'
@@ -43,11 +47,14 @@ const OFF_RECORD_PHRASE = /\boff the record\b/i
 type OffRecordSource = 'agent' | 'phrase' | 'button'
 type Phase = 'capture' | 'drafting' | 'debrief'
 
-/** Window B. The ElevenLabs provider wraps everything so any panel can reach the conversation. */
+/** Window B: the intro (/apprentice), capture (?mode=capture) or teach (?mode=teach). */
 export function AgentShell() {
   const [params] = useSearchParams()
+  const mode = params.get('mode')
+  if (mode !== 'capture' && mode !== 'teach') return <IntroPage />
   // Switching modes is a full page load (plain links), so a running conversation never leaks across.
-  return <ConversationProvider>{params.get('mode') === 'teach' ? <TeachApp /> : <ApprenticeApp />}</ConversationProvider>
+  // The ElevenLabs provider wraps everything so any panel can reach the conversation.
+  return <ConversationProvider>{mode === 'teach' ? <TeachApp /> : <ApprenticeApp />}</ConversationProvider>
 }
 
 function ApprenticeApp() {
@@ -72,9 +79,10 @@ function ApprenticeApp() {
   const compactRef = useRef('')
   const teachbackSent = useRef(false)
   const now = useNow(1000)
+  const erpOpen = useErpWindow()
 
   useEffect(() => {
-    document.title = 'Apprentice'
+    document.title = 'Apprentice · Capture'
   }, [])
 
   const tNow = () => (sessionRef.current ? sessionT(sessionRef.current.startedAtMs) : undefined)
@@ -129,6 +137,7 @@ function ApprenticeApp() {
 
   const capture = useScreenCapture({
     threshold: diffThreshold,
+    mask: erpOrbMasks, // the ERP's mirror of our orb moves constantly; vision never sees it
     // Keeps the agent from taking a turn while the screen is moving.
     onActivity: () => {
       if (connectedRef.current) sendUserActivity()
@@ -419,17 +428,29 @@ function ApprenticeApp() {
 
   return (
     <div className="appr">
+      <nav className="appr-crumbs">
+        <a href="/apprentice">← Home</a>
+        <a href="/apprentice?mode=teach">Train a new hire instead</a>
+      </nav>
       <header className="appr-head">
-        <div>
-          <h1>Apprentice</h1>
-          <div className="appr-sub">
-            Shadowing {EXPERT.name} · {session ? `${session.id} · ${formatT(sessionT(session.startedAtMs, now))}` : 'no session'} ·{' '}
-            <a href="/apprentice?mode=teach">teach mode</a>
+        <div className="appr-head-left">
+          <PresenceOrb
+            connected={connected}
+            speaking={mode === 'speaking'}
+            offRecord={offRecord !== null}
+            getInputVolume={conversation.getInputVolume}
+            getOutputVolume={conversation.getOutputVolume}
+          />
+          <div>
+            <h1>Teach the apprentice</h1>
+            <div className="appr-sub">
+              Shadowing {EXPERT.name} · {session ? `${session.id} · ${formatT(sessionT(session.startedAtMs, now))}` : 'no session yet'}
+            </div>
           </div>
         </div>
         <div className="appr-head-right">
           <span className={`status status-${status}`}>
-            {status === 'connected' ? (mode === 'speaking' ? 'Speaking' : 'Listening') : status}
+            {offRecord ? presenceLabel.off_record : status === 'connected' ? (mode === 'speaking' ? 'Speaking' : 'Listening') : status}
           </span>
           {session && phase === 'capture' && !offRecord && (
             <button type="button" className="appr-btn" onClick={() => void doneWithTask()}>
@@ -475,6 +496,38 @@ function ApprenticeApp() {
         </div>
       )}
 
+      {phase === 'capture' && !(connected && capture.sharing) && (
+        <GetReady
+          title="Get ready"
+          steps={[
+            {
+              label: `Open ${EXPERT.name}'s queue in its own window`,
+              detail: 'The Sandbox ERP. This is the window you share.',
+              done: erpOpen,
+              action: { label: 'Open ERP window', onClick: () => openErpWindow('expert') },
+            },
+            {
+              label: 'Start the session',
+              detail: 'Allow the microphone. Wear headphones so the apprentice does not hear itself.',
+              done: connected,
+              action: { label: starting ? 'Starting…' : 'Start', onClick: () => void start(), disabled: starting || live },
+            },
+            {
+              label: 'Share the ERP window',
+              detail: 'Pick the Sandbox ERP window in the browser prompt, not this one.',
+              done: capture.sharing,
+              action: { label: 'Share screen', onClick: share, disabled: !session },
+            },
+          ]}
+          note={
+            <>
+              Then work as usual and talk through what you do. Say <strong>"off the record"</strong> any time to pause
+              everything.
+            </>
+          }
+        />
+      )}
+
       {map && phase === 'debrief' && (
         <DebriefPanel map={map} expertName={EXPERT.name} onSkip={skipQuestion} onStartTeachback={startTeachback} />
       )}
@@ -483,9 +536,9 @@ function ApprenticeApp() {
         <WorkMapView sessionId={session.id} map={map} expertName={EXPERT.name} onStrike={strikeMapItem} showOpenLink />
       )}
 
-      {phase === 'capture' && <BrainPanel brain={detector.brain} moments={moments} expertName={EXPERT.name} />}
+      {session && phase === 'capture' && <BrainPanel brain={detector.brain} moments={moments} expertName={EXPERT.name} />}
 
-      {phase === 'capture' && (
+      {session && phase === 'capture' && (
         <CapturePanel
         sessionId={session?.id}
         sharing={capture.sharing}

@@ -218,6 +218,24 @@ export interface GuardrailResolvedMessage { sessionId: string; invoiceId: string
 export interface MasteryUpdatedMessage { sessionId: string; mastery: MasteryRecord[] }
 
 // ---------------------------------------------------------------------------
+// Presence: the apprentice window ↔ the shared ERP window (relayed by the socket gateway)
+// ---------------------------------------------------------------------------
+
+/** socket `agent_presence`, from the apprentice window ~12×/s: drives the orb on the ERP. */
+export interface AgentPresence {
+  state: 'off' | 'listening' | 'speaking' | 'off_record';
+  level: number; // 0..1: the agent's voice while speaking, the person's while listening
+}
+
+/** socket `erp_layout`, from the ERP: where the orb sits, so capture can mask it out of what vision sees. */
+export interface ErpLayoutMessage {
+  windowId: string; // one per ERP page load: several ERP windows may be open
+  dpr: number; // devicePixelRatio, to tell which window is the shared one
+  mask: { x: number; y: number; w: number; h: number }; // CSS px, relative to the viewport
+  viewport: { w: number; h: number };
+}
+
+// ---------------------------------------------------------------------------
 // ElevenLabs client tools (BUILD_PLAN §6). Names and params are case-sensitive:
 // apps/api/scripts/setup-agents.ts registers exactly these, the web app handles them.
 // ---------------------------------------------------------------------------

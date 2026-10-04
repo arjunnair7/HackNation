@@ -45,7 +45,7 @@ export type ActionResult = { ok: true; detail: ErpInvoiceDetail } | { ok: false;
 const invoicePath = (id: string) => `/invoices/${encodeURIComponent(id)}`
 
 export const erpApi = {
-  listInvoices: (queue: ErpQueue) => request<ErpInvoiceSummary[]>(`/invoices?queue=${queue}`),
+  listInvoices: (queue?: ErpQueue) => request<ErpInvoiceSummary[]>(queue ? `/invoices?queue=${queue}` : '/invoices'),
 
   getInvoice: (id: string) => request<ErpInvoiceDetail>(invoicePath(id)),
 
@@ -69,4 +69,9 @@ export const erpApi = {
   },
 
   reset: () => request<{ ok: true }>('/reset', { method: 'POST' }),
+}
+
+/** Tells the layout (sidebar counts) that invoices changed. */
+export function announceErpChange() {
+  window.dispatchEvent(new Event('erp:changed'))
 }

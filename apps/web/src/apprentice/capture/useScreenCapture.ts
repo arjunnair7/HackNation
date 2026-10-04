@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { MaskRect } from '../lib/erpLayout.ts'
 import { DEFAULT_DIFF_THRESHOLD, DIFF_HEIGHT, DIFF_WIDTH, meanAbsDiff, toGray } from './frameDiff.ts'
 
 export interface CapturedFrame {
@@ -16,6 +17,28 @@ export interface ScreenCaptureOptions {
   settleMs?: number
   maxWidth?: number
   jpegQuality?: number
+  /** Regions (video px) painted over before diffing and before every frame sent, e.g. the ERP's orb. */
+  mask?: (videoW: number, videoH: number) => MaskRect[]
+}
+
+const MASK_FILL = '#0f1b2d' // the ERP sidebar's colour, so the blanked corner reads as empty sidebar
+
+/**
+ * Paints the masks (given in video px) onto a canvas holding the video drawn at width × height.
+ * Axes scale separately: the 96×54 diff canvas stretches any video that isn't 16:9.
+ */
+function paintMask(ctx: CanvasRenderingContext2D, rects: MaskRect[] | undefined, video: HTMLVideoElement, width: number, height: number) {
+  if (!rects?.length) return
+  const kx = width / video.videoWidth
+  const ky = height / video.videoHeight
+  ctx.fillStyle = MASK_FILL
+  for (const rect of rects) {
+    const x0 = Math.max(0, Math.floor(rect.x * kx))
+    const y0 = Math.max(0, Math.floor(rect.y * ky))
+    const x1 = Math.min(width, Math.ceil((rect.x + rect.w) * kx))
+    const y1 = Math.min(height, Math.ceil((rect.y + rect.h) * ky))
+    if (x1 > x0 && y1 > y0) ctx.fillRect(x0, y0, x1 - x0, y1 - y0)
+  }
 }
 
 interface Runner {
@@ -97,6 +120,7 @@ export function useScreenCapture(options: ScreenCaptureOptions) {
       full.width = Math.round(video.videoWidth * scale)
       full.height = Math.round(video.videoHeight * scale)
       fullCtx.drawImage(video, 0, 0, full.width, full.height)
+      paintMask(fullCtx, optionsRef.current.mask?.(video.videoWidth, video.videoHeight), video, full.width, full.height)
       const dataUrl = full.toDataURL('image/jpeg', optionsRef.current.jpegQuality ?? 0.75)
       return dataUrl.slice(dataUrl.indexOf(',') + 1)
     }
@@ -107,6 +131,7 @@ export function useScreenCapture(options: ScreenCaptureOptions) {
       const now = Date.now()
 
       tinyCtx.drawImage(video, 0, 0, DIFF_WIDTH, DIFF_HEIGHT)
+      paintMask(tinyCtx, optionsRef.current.mask?.(video.videoWidth, video.videoHeight), video, DIFF_WIDTH, DIFF_HEIGHT)
       const current = toGray(tinyCtx.getImageData(0, 0, DIFF_WIDTH, DIFF_HEIGHT).data)
       const d = state.previous ? meanAbsDiff(state.previous, current) : 0
       state.previous = current

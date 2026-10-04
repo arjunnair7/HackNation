@@ -18,6 +18,7 @@ import { DEFAULT_DIFF_THRESHOLD } from '../capture/frameDiff.ts'
 import { useScreenCapture } from '../capture/useScreenCapture.ts'
 import { api } from '../lib/api.ts'
 import { formatT, sessionT, useNow } from '../lib/clock.ts'
+import { erpOrbMasks, openErpWindow, useErpWindow } from '../lib/erpLayout.ts'
 import { useLog, type LogKind } from '../lib/log.ts'
 import { expertWords, guardrailReplay, stepReplay } from '../lib/mapReplay.ts'
 import { getSocket } from '../lib/socket.ts'
@@ -28,6 +29,8 @@ import { ReplayModal, type ReplayTarget } from '../panels/ReplayModal.tsx'
 import { TutorPanel, type TutorAlert, type TutorCueState } from '../panels/TutorPanel.tsx'
 import { useApprenticeClientTools } from './clientTools.ts'
 import { screenCue } from './cues.ts'
+import { GetReady } from './GetReady.tsx'
+import { PresenceOrb } from './PresenceOrb.tsx'
 import { RULES } from './momentRules.ts'
 import type { VoiceSignal } from './useMomentDetector.ts'
 
@@ -44,6 +47,7 @@ export function TeachApp() {
   const debug = params.get('debug') === '1'
   const { entries, add } = useLog()
   const now = useNow(1000)
+  const erpOpen = useErpWindow()
 
   const [maps, setMaps] = useState<MapSummary[]>([])
   const [mapId, setMapId] = useState(params.get('map') ?? '')
@@ -107,6 +111,7 @@ export function TeachApp() {
 
   const capture = useScreenCapture({
     threshold: diffThreshold,
+    mask: erpOrbMasks, // the ERP's mirror of our orb moves constantly; vision never sees it
     onActivity: () => {
       if (connectedRef.current) sendUserActivity()
     },
@@ -331,12 +336,23 @@ export function TeachApp() {
 
   return (
     <div className="appr">
+      <nav className="appr-crumbs">
+        <a href="/apprentice">← Home</a>
+        <a href="/apprentice?mode=capture">Teach the apprentice instead</a>
+      </nav>
       <header className="appr-head">
-        <div>
-          <h1>Apprentice · Teach</h1>
-          <div className="appr-sub">
-            Coaching {TRAINEE.name} · {session ? `${session.id} · ${formatT(sessionT(session.startedAtMs, now))}` : 'no session'} ·{' '}
-            <a href="/apprentice">capture mode</a>
+        <div className="appr-head-left">
+          <PresenceOrb
+            connected={connected}
+            speaking={mode === 'speaking'}
+            getInputVolume={conversation.getInputVolume}
+            getOutputVolume={conversation.getOutputVolume}
+          />
+          <div>
+            <h1>Train a new hire</h1>
+            <div className="appr-sub">
+              Coaching {TRAINEE.name} · {session ? `${session.id} · ${formatT(sessionT(session.startedAtMs, now))}` : 'no session yet'}
+            </div>
           </div>
         </div>
         <div className="appr-head-right">
@@ -355,25 +371,46 @@ export function TeachApp() {
 
       {!TUTOR_AGENT_ID && <div className="appr-alert">VITE_TUTOR_AGENT_ID is missing. Run setup-agents, then restart npm run dev.</div>}
 
-      {!session && (
-        <section className="appr-card">
-          <h2>Teach from</h2>
-          {maps.length ? (
-            <select className="appr-input" value={mapId} onChange={(e) => setMapId(e.target.value)}>
-              {maps.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.expert.name} · {m.id} · v{m.version} · {m.steps} steps · {m.guardrails} guardrails · teach-back {m.teachback}
-                  {m.confirmedAt ? ` ${m.confirmedAt.slice(0, 16).replace('T', ' ')}` : ''}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <p className="appr-muted">No Work Map yet: run a capture and confirm the teach-back first.</p>
-          )}
-          <p className="appr-small">
-            Then share the ERP window on <strong>/erp?queue=trainee</strong> (Lena's queue). Reset it with <strong>/erp?reset=1</strong>.
-          </p>
-        </section>
+      {!ended && !(connected && capture.sharing) && (
+        <GetReady
+          title="Get ready"
+          steps={[
+            {
+              label: 'Choose the Work Map to teach from',
+              detail: maps.length ? (
+                <select className="appr-input" value={mapId} onChange={(e) => setMapId(e.target.value)} disabled={session !== null}>
+                  {maps.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.expert.name} · {m.id} · v{m.version} · {m.steps} steps · {m.guardrails} guardrails · teach-back {m.teachback}
+                      {m.confirmedAt ? ` ${m.confirmedAt.slice(0, 16).replace('T', ' ')}` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                'No Work Map yet: teach the apprentice first and confirm the teach-back.'
+              ),
+              done: Boolean(mapId),
+            },
+            {
+              label: `Open ${TRAINEE.name}'s queue in its own window`,
+              detail: 'The Sandbox ERP. Reset it from its sidebar for a fresh run.',
+              done: erpOpen,
+              action: { label: 'Open ERP window', onClick: () => openErpWindow('trainee') },
+            },
+            {
+              label: 'Start training',
+              detail: 'Allow the microphone. Headphones keep the tutor from hearing itself.',
+              done: connected,
+              action: { label: starting ? 'Starting…' : 'Start training', onClick: () => void start(), disabled: starting || live || !mapId },
+            },
+            {
+              label: 'Share the ERP window',
+              detail: 'Pick the Sandbox ERP window in the browser prompt, not this one.',
+              done: capture.sharing,
+              action: { label: 'Share screen', onClick: share, disabled: !session },
+            },
+          ]}
+        />
       )}
 
       {map && session && (

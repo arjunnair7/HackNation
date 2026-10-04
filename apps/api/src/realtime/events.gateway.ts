@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import {
+  ConnectedSocket,
   MessageBody,
   type OnGatewayConnection,
   type OnGatewayDisconnect,
@@ -29,6 +30,18 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('ping')
   ping(@MessageBody() data: unknown) {
     return { pong: true, serverTime: Date.now(), echo: data ?? null };
+  }
+
+  /** Apprentice window → ERP window: the agent's state for the orb. Relayed to every other client. */
+  @SubscribeMessage('agent_presence')
+  presence(@MessageBody() data: unknown, @ConnectedSocket() client: Socket) {
+    client.broadcast.emit('agent_presence', data);
+  }
+
+  /** ERP window → apprentice window: where the orb is, so capture can mask it. */
+  @SubscribeMessage('erp_layout')
+  erpLayout(@MessageBody() data: unknown, @ConnectedSocket() client: Socket) {
+    client.broadcast.emit('erp_layout', data);
   }
 
   emit(event: string, payload: unknown) {
