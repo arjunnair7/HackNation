@@ -59,6 +59,20 @@ export class SessionsController {
     return this.moments.setStatus(id, body);
   }
 
+  /** Body: OffRecordRequest. { from } opens a window and purges what it covers; { to } closes it. */
+  @Post(':id/off-record')
+  @HttpCode(200)
+  offRecord(@Param('id') id: string, @Body() body: unknown): Session['offRecord'] {
+    return this.sessions.setOffRecord(id, body);
+  }
+
+  /** Body: StrikeRequest. Returns the session's struck ids. */
+  @Post(':id/strike')
+  @HttpCode(200)
+  strike(@Param('id') id: string, @Body() body: unknown): string[] {
+    return this.sessions.strike(id, body);
+  }
+
   /** Body: DebugEventRequest. Debug drawer only. */
   @Post(':id/events')
   debugEvent(@Param('id') id: string, @Body() body: unknown): ScreenEvent {

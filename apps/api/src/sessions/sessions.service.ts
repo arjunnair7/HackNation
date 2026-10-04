@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import type {
   CreateSessionRequest,
   FrameRef,
   FrameUploadResponse,
   Mode,
+  MomentsUpdatedMessage,
   ScreenEvent,
   ScreenEventsMessage,
   Session,
@@ -11,6 +12,8 @@ import type {
 } from '@apprentice/shared';
 import { newId } from '../common/ids';
 import { MomentsService } from '../moments/moments.service';
+import { OFF_RECORD_TEXT, inOffRecord, isOffRecordNow } from '../privacy/record';
+import { redactText } from '../privacy/redact';
 import { EventsGateway } from '../realtime/events.gateway';
 import { VisionService } from '../vision/vision.service';
 import { SessionStore } from './session.store';
@@ -24,6 +27,8 @@ const DEFAULT_TASK = 'Process supplier invoices before period close';
 
 @Injectable()
 export class SessionsService {
+  private readonly logger = new Logger(SessionsService.name);
+
   constructor(
     private readonly store: SessionStore,
     private readonly vision: VisionService,
@@ -52,7 +57,9 @@ export class SessionsService {
     let utterance!: Utterance;
     this.store.update(sessionId, (s) => {
       const speaker = b.role === 'agent' ? 'agent' : s.mode === 'teach' ? 'trainee' : 'expert';
-      utterance = { id: newId('u'), t, speaker, text: b.text as string, final: true };
+      const off = inOffRecord(s, t);
+      const text = off ? OFF_RECORD_TEXT : redactText(b.text as string);
+      utterance = { id: newId('u'), t, speaker, text, final: true, ...(off && { offRecord: true }) };
       s.transcript.push(utterance);
     });
     return utterance;
@@ -60,9 +67,10 @@ export class SessionsService {
 
   /** Stores the JPEG, records the FrameRef and queues it for vision. Events arrive over the socket. */
   addFrame(sessionId: string, body: unknown): FrameUploadResponse {
-    this.store.require(sessionId);
+    const session = this.store.require(sessionId);
     const b = asObject(body);
     const t = seconds(b.t);
+    if (inOffRecord(session, t)) return { dropped: true };
     if (typeof b.jpegBase64 !== 'string') throw new BadRequestException('jpegBase64 is required');
     const base64 = b.jpegBase64.replace(/^data:image\/jpeg;base64,/, '');
     const jpeg = Buffer.from(base64, 'base64');
@@ -85,7 +93,8 @@ export class SessionsService {
     if (typeof b.description !== 'string' || !b.description.trim()) throw new BadRequestException('description is required');
     const session = this.store.require(sessionId);
     const t = b.t === undefined ? (Date.now() - session.startedAtMs) / 1000 : seconds(b.t);
-    const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+    if (inOffRecord(session, t)) throw new ConflictException('Off the record: nothing is captured');
+    const text = (v: unknown) => (typeof v === 'string' && v.trim() ? redactText(v.trim()) : undefined);
     const event: ScreenEvent = {
       id: newId('e'),
       t,
@@ -95,7 +104,7 @@ export class SessionsService {
       field: text(b.field),
       from: text(b.from),
       to: text(b.to),
-      description: (b.description as string).trim(),
+      description: redactText((b.description as string).trim()),
     };
     this.store.update(sessionId, (s) => s.events.push(event));
     const message: ScreenEventsMessage = {
@@ -104,6 +113,70 @@ export class SessionsService {
     this.gateway.emit('screen_events', message);
     this.moments.onEvents(sessionId, [event]);
     return event;
+  }
+
+  /**
+   * { from } opens an off-record window and purges everything already captured from `from` on
+   * (frames, screen events, moments, answers; utterances are blanked). { to } closes it.
+   * Either way the vision state is forgotten, so the first frame back is not diffed against
+   * anything from before (which would describe what happened off the record).
+   */
+  setOffRecord(sessionId: string, body: unknown): Session['offRecord'] {
+    const b = asObject(body);
+    const session = this.store.update(sessionId, (s) => {
+      if (b.from !== undefined) {
+        const from = seconds(b.from);
+        if (isOffRecordNow(s)) return;
+        s.offRecord.push({ from });
+        this.purge(s, from);
+      } else if (b.to !== undefined) {
+        const open = s.offRecord.find((w) => w.to === undefined);
+        if (open) open.to = Math.max(open.from, seconds(b.to));
+      } else {
+        throw new BadRequestException('Expected { from } or { to }');
+      }
+    });
+    this.vision.forget(sessionId);
+    this.emitMoments(session);
+    return session.offRecord;
+  }
+
+  /** The expert removes one utterance, screen event or answer from the record. */
+  strike(sessionId: string, body: unknown): string[] {
+    const b = asObject(body);
+    if (typeof b.id !== 'string' || !b.id) throw new BadRequestException('id is required');
+    const id = b.id;
+    const session = this.store.update(sessionId, (s) => {
+      const known = s.transcript.some((u) => u.id === id) || s.events.some((e) => e.id === id) || s.answers.some((a) => a.id === id);
+      if (!known) throw new BadRequestException(`Nothing with id ${id} in this session`);
+      s.struck = [...new Set([...(s.struck ?? []), id])];
+      // A moment built only from struck events has nothing left to ask about.
+      for (const m of s.moments) m.eventIds = m.eventIds.filter((e) => e !== id);
+      s.moments = s.moments.filter((m) => m.eventIds.length > 0);
+    });
+    this.emitMoments(session);
+    return session.struck ?? [];
+  }
+
+  private purge(s: Session, from: number): void {
+    const dropped = s.frames.filter((f) => f.t >= from);
+    for (const f of dropped) this.store.deleteFrame(s.id, f);
+    const droppedIds = new Set(dropped.map((f) => f.id));
+    s.frames = s.frames.filter((f) => !droppedIds.has(f.id));
+    const goneEvents = new Set(s.events.filter((e) => e.t >= from || droppedIds.has(e.frameId)).map((e) => e.id));
+    s.events = s.events.filter((e) => !goneEvents.has(e.id));
+    for (const m of s.moments) m.eventIds = m.eventIds.filter((e) => !goneEvents.has(e));
+    s.moments = s.moments.filter((m) => m.t < from && m.eventIds.length > 0);
+    s.answers = s.answers.filter((a) => a.t < from);
+    for (const u of s.transcript) {
+      if (u.t >= from) Object.assign(u, { text: OFF_RECORD_TEXT, offRecord: true });
+    }
+    this.logger.log(`${s.id}: off the record from ${from}s, purged ${dropped.length} frame(s) and ${goneEvents.size} event(s)`);
+  }
+
+  private emitMoments(session: Session): void {
+    const message: MomentsUpdatedMessage = { sessionId: session.id, moments: session.moments };
+    this.gateway.emit('moments_updated', message);
   }
 }
 

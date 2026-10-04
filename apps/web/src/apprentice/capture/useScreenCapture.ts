@@ -21,6 +21,7 @@ export interface ScreenCaptureOptions {
 interface Runner {
   stream: MediaStream
   timer: ReturnType<typeof setInterval>
+  state: { previous: Float32Array | null; lastSent: Float32Array | null; lastActivityAt: number; paused: boolean }
 }
 
 /**
@@ -42,6 +43,7 @@ export function useScreenCapture(options: ScreenCaptureOptions) {
   const [diff, setDiff] = useState(0)
   const [lastChangeAt, setLastChangeAt] = useState(0)
   const [framesSent, setFramesSent] = useState(0)
+  const [paused, setPaused] = useState(false)
 
   const stop = useCallback(() => {
     const r = runner.current
@@ -51,6 +53,20 @@ export function useScreenCapture(options: ScreenCaptureOptions) {
     r.stream.getTracks().forEach((track) => track.stop())
     setStream(null)
     setDiff(0)
+    setPaused(false)
+  }, [])
+
+  /** Off the record: keep the share open but sample and send nothing. */
+  const pause = useCallback(() => {
+    if (runner.current) runner.current.state.paused = true
+    setPaused(true)
+    setDiff(0)
+  }, [])
+
+  /** Back on the record: start fresh so the current screen is sent as a new first frame. */
+  const resume = useCallback(() => {
+    if (runner.current) Object.assign(runner.current.state, { paused: false, previous: null, lastSent: null })
+    setPaused(false)
   }, [])
 
   const start = useCallback(async () => {
@@ -74,9 +90,7 @@ export function useScreenCapture(options: ScreenCaptureOptions) {
     const full = document.createElement('canvas')
     const fullCtx = full.getContext('2d')!
 
-    let previous: Float32Array | null = null
-    let lastSent: Float32Array | null = null
-    let lastActivityAt = 0
+    const state: Runner['state'] = { previous: null, lastSent: null, lastActivityAt: 0, paused: false }
 
     const grab = (): string => {
       const scale = Math.min(1, (optionsRef.current.maxWidth ?? 1280) / video.videoWidth)
@@ -88,41 +102,41 @@ export function useScreenCapture(options: ScreenCaptureOptions) {
     }
 
     const tick = () => {
-      if (video.readyState < 2 || !video.videoWidth) return
+      if (state.paused || video.readyState < 2 || !video.videoWidth) return
       const { threshold = DEFAULT_DIFF_THRESHOLD, settleMs = 800 } = optionsRef.current
       const now = Date.now()
 
       tinyCtx.drawImage(video, 0, 0, DIFF_WIDTH, DIFF_HEIGHT)
       const current = toGray(tinyCtx.getImageData(0, 0, DIFF_WIDTH, DIFF_HEIGHT).data)
-      const d = previous ? meanAbsDiff(previous, current) : 0
-      previous = current
+      const d = state.previous ? meanAbsDiff(state.previous, current) : 0
+      state.previous = current
       setDiff(d)
 
       if (d > threshold) {
         lastScreenChangeAt.current = now
         setLastChangeAt(now)
-        if (now - lastActivityAt >= 1000) {
-          lastActivityAt = now
+        if (now - state.lastActivityAt >= 1000) {
+          state.lastActivityAt = now
           optionsRef.current.onActivity?.()
         }
         return
       }
 
       const settled = now - lastScreenChangeAt.current >= settleMs
-      const dirty = !lastSent || meanAbsDiff(lastSent, current) > threshold
+      const dirty = !state.lastSent || meanAbsDiff(state.lastSent, current) > threshold
       if (settled && dirty) {
-        lastSent = current
+        state.lastSent = current
         setFramesSent((n) => n + 1)
         optionsRef.current.onFrame({ jpegBase64: grab(), capturedAt: now })
       }
     }
 
     media.getVideoTracks()[0]?.addEventListener('ended', stop) // "Stop sharing" in the browser bar
-    runner.current = { stream: media, timer: setInterval(tick, optionsRef.current.sampleMs ?? 500) }
+    runner.current = { stream: media, timer: setInterval(tick, optionsRef.current.sampleMs ?? 500), state }
     setStream(media)
   }, [stop])
 
   useEffect(() => stop, [stop])
 
-  return { start, stop, stream, sharing: stream !== null, diff, lastChangeAt, framesSent, lastScreenChangeAt }
+  return { start, stop, pause, resume, paused, stream, sharing: stream !== null, diff, lastChangeAt, framesSent, lastScreenChangeAt }
 }

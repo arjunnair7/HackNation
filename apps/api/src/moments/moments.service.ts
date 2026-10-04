@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import type {
   Answer,
   AnswerRecordedMessage,
@@ -14,6 +14,8 @@ import type {
 import { newId } from '../common/ids';
 import { ErpService } from '../erp/erp.service';
 import { AnthropicService } from '../llm/anthropic.service';
+import { isOffRecordNow } from '../privacy/record';
+import { redactText } from '../privacy/redact';
 import { NARRATION_PROMPT, REPORT_NARRATION_TOOL, type ReportNarrationResult } from '../prompts/narration';
 import { EventsGateway } from '../realtime/events.gateway';
 import { SessionStore } from '../sessions/session.store';
@@ -110,7 +112,7 @@ export class MomentsService implements OnModuleDestroy {
     if (!req || typeof req.momentId !== 'string' || typeof req.reasonQuote !== 'string') {
       throw new BadRequestException('Expected { momentId, reasonQuote, ... }');
     }
-    this.store.require(sessionId);
+    if (isOffRecordNow(this.store.require(sessionId))) throw new ConflictException('Off the record: nothing is recorded');
     await new Promise((r) => setTimeout(r, ANSWER_SETTLE_MS));
 
     let answer!: Answer;
@@ -119,14 +121,15 @@ export class MomentsService implements OnModuleDestroy {
       const offered = s.moments.filter((m) => m.status === 'offered');
       // The agent occasionally mangles an id; then the answer belongs to the best offered candidate.
       const target = s.moments.find((m) => m.id === asked) ?? offered[0];
-      const verbatim = answerAfterLastQuestion(s.transcript);
+      const struck = new Set(s.struck ?? []);
+      const verbatim = answerAfterLastQuestion(s.transcript.filter((u) => !struck.has(u.id)));
       answer = {
         id: newId('a'),
         momentOrQuestionId: target?.id ?? asked,
         t: (Date.now() - s.startedAtMs) / 1000,
-        quote: verbatim ?? req.reasonQuote!.trim(),
-        summary: text(req.decisionSummary),
-        guardrailText: text(req.guardrailText),
+        quote: redactText(verbatim ?? req.reasonQuote!.trim()),
+        summary: text(req.decisionSummary) && redactText(text(req.decisionSummary)!),
+        guardrailText: text(req.guardrailText) && redactText(text(req.guardrailText)!),
         guardrailKind: GUARDRAIL_KINDS.includes(req.guardrailKind as GuardrailKind) ? req.guardrailKind : undefined,
         source: 'live',
       };
@@ -200,9 +203,10 @@ export class MomentsService implements OnModuleDestroy {
     const s = this.store.get(sessionId);
     const moment = s?.moments.find((m) => m.id === momentId);
     if (!s || !moment) return;
+    const struck = new Set(s.struck ?? []);
     const speech = s.transcript.filter(
       (u) =>
-        u.speaker === 'expert' && !u.offRecord &&
+        u.speaker === 'expert' && !u.offRecord && !struck.has(u.id) &&
         u.t >= moment.t - NARRATION_BEFORE_S && u.t <= moment.t + NARRATION_AFTER_S + TRANSCRIPT_LAG_S,
     );
 

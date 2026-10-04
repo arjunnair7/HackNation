@@ -422,6 +422,72 @@ body:has(.appr) {
   color: var(--a-ok);
 }
 
+/* --- trust ------------------------------------------------------------------ */
+
+.appr-btn-danger {
+  border-color: var(--a-danger);
+  color: var(--a-danger);
+}
+
+.off-record {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 2px solid var(--a-danger);
+  border-radius: 8px;
+  background: rgba(255, 107, 107, 0.14);
+}
+
+.off-record strong {
+  display: block;
+  font-size: 18px;
+  color: var(--a-danger);
+}
+
+.off-record span {
+  font-size: 13px;
+  color: var(--a-muted);
+}
+
+.pill-off {
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--a-danger);
+}
+
+.feed-row:has(.feed-action) {
+  grid-template-columns: 44px 84px 1fr auto;
+}
+
+.feed-action {
+  font-size: 12px;
+  color: var(--a-muted);
+}
+
+.feed-remove {
+  padding: 0 6px;
+  border: 1px solid var(--a-line);
+  border-radius: 4px;
+  background: none;
+  color: var(--a-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  visibility: hidden;
+}
+
+.feed-row:hover .feed-remove,
+.feed-remove:focus-visible {
+  visibility: visible;
+}
+
+.feed-struck .feed-text {
+  text-decoration: line-through;
+  color: var(--a-muted);
+}
+
 /* --- debug ------------------------------------------------------------------ */
 
 .debug summary {

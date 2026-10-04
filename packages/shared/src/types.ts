@@ -19,6 +19,7 @@ export interface Session {
   offRecord: { from: number; to?: number }[];
   mapId?: string;                       // capture: produced map; teach: map being taught
   mastery?: MasteryRecord[];            // teach only
+  struck?: string[];                    // ids the expert removed from the capture record (utterances, events, answers)
 }
 
 export interface FrameRef { id: string; t: number; path: string; redacted: boolean }
@@ -110,7 +111,13 @@ export interface TranscriptRequest { t: number; role: 'user' | 'agent'; text: st
 
 /** POST /api/sessions/:id/frames */
 export interface FrameUploadRequest { t: number; jpegBase64: string }
-export interface FrameUploadResponse { frameId: string }
+export interface FrameUploadResponse { frameId?: string; dropped?: boolean } // dropped: inside an off-record window
+
+/** POST /api/sessions/:id/off-record: { from } opens a window, { to } closes it (session seconds). */
+export type OffRecordRequest = { from: number } | { to: number };
+
+/** POST /api/sessions/:id/strike: remove one utterance, screen event or answer from the record. */
+export interface StrikeRequest { id: string }
 
 /** POST /api/sessions/:id/events (debug drawer: inject a fake screen event). */
 export type DebugEventRequest = Pick<ScreenEvent, 'kind' | 'description'> &

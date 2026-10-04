@@ -1,7 +1,7 @@
-import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Session } from '@apprentice/shared';
+import type { FrameRef, Session } from '@apprentice/shared';
 import { newId, SAFE_ID } from '../common/ids';
 import { dataDir } from '../common/paths';
 
@@ -91,6 +91,13 @@ export class SessionStore {
     if (!SAFE_ID.test(frameId)) throw new Error(`Unsafe frame id ${frameId}`);
     mkdirSync(join(this.dir(sessionId), 'frames'), { recursive: true });
     writeFileSync(join(this.dir(sessionId), 'frames', `${frameId}.json`), JSON.stringify(data, null, 2));
+  }
+
+  /** Removes a frame's JPEG and its sidecar JSON (off-record purge). */
+  deleteFrame(sessionId: string, frame: FrameRef): void {
+    const jpg = this.frameFile(sessionId, frame.path);
+    rmSync(jpg, { force: true });
+    rmSync(jpg.replace(/\.jpg$/, '.json'), { force: true });
   }
 
   /** Absolute path of a stored frame (FrameRef.path is relative). */

@@ -6,9 +6,11 @@ import type {
   FrameUploadResponse,
   Moment,
   MomentStatusRequest,
+  OffRecordRequest,
   RecordAnswerRequest,
   ScreenEvent,
   Session,
+  StrikeRequest,
   TranscriptRequest,
   Utterance,
 } from '@apprentice/shared'
@@ -37,5 +39,7 @@ export const api = {
   recordAnswer: (sessionId: string, body: RecordAnswerRequest) => post<Answer>(`/sessions/${sessionId}/answers`, body),
   setMomentStatus: (sessionId: string, body: MomentStatusRequest) =>
     post<Moment[]>(`/sessions/${sessionId}/moments/status`, body),
+  offRecord: (sessionId: string, body: OffRecordRequest) => post<Session['offRecord']>(`/sessions/${sessionId}/off-record`, body),
+  strike: (sessionId: string, body: StrikeRequest) => post<string[]>(`/sessions/${sessionId}/strike`, body),
   frameUrl: (sessionId: string, frameId: string) => `/api/sessions/${sessionId}/frames/${frameId}`,
 }

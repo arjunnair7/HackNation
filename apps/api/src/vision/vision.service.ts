@@ -3,6 +3,8 @@ import type { FrameRef, ScreenEvent, ScreenEventsMessage, VisionErrorMessage } f
 import { newId } from '../common/ids';
 import { AnthropicService } from '../llm/anthropic.service';
 import { MomentsService } from '../moments/moments.service';
+import { inOffRecord } from '../privacy/record';
+import { redactDeep } from '../privacy/redact';
 import { REPORT_SCREEN_TOOL, VISION_PROMPT, type ReportScreenResult } from '../prompts/vision';
 import { EventsGateway } from '../realtime/events.gateway';
 import { SessionStore } from '../sessions/session.store';
@@ -31,11 +33,22 @@ export class VisionService {
     private readonly moments: MomentsService,
   ) {}
 
+  /** Off the record: drop the waiting frame and the previous state (so nothing is diffed across the gap). */
+  forget(sessionId: string): void {
+    this.waiting.delete(sessionId);
+    this.prevState.delete(sessionId);
+  }
+
   enqueue(sessionId: string, frame: FrameRef, jpegBase64: string): void {
     const replaced = this.waiting.get(sessionId);
     if (replaced) this.logger.debug(`${sessionId}: skipping ${replaced.frame.id}, superseded by ${frame.id}`);
     this.waiting.set(sessionId, { frame, jpegBase64 });
     if (!this.running.has(sessionId)) void this.drain(sessionId);
+  }
+
+  private stillOnRecord(sessionId: string, frame: FrameRef): boolean {
+    const s = this.store.get(sessionId);
+    return !!s && s.frames.some((f) => f.id === frame.id) && !inOffRecord(s, frame.t);
   }
 
   private async drain(sessionId: string): Promise<void> {
@@ -52,10 +65,11 @@ export class VisionService {
 
   private async analyse(sessionId: string, frame: FrameRef, jpegBase64: string): Promise<void> {
     const model = process.env.VISION_MODEL || 'claude-haiku-4-5-20251001';
+    if (!this.stillOnRecord(sessionId, frame)) return;
     const prev = this.prevState.get(sessionId);
     const started = Date.now();
     try {
-      const result = await this.llm.callTool<ReportScreenResult>({
+      const raw = await this.llm.callTool<ReportScreenResult>({
         model,
         system: VISION_PROMPT,
         tool: REPORT_SCREEN_TOOL,
@@ -69,6 +83,9 @@ export class VisionService {
         ],
       });
       const ms = Date.now() - started;
+      // Went off the record while Claude was looking at this frame: keep nothing from it.
+      if (!this.stillOnRecord(sessionId, frame)) return;
+      const result = redactDeep(raw); // PII never reaches storage, the moment queue or the agent
       this.prevState.set(sessionId, { screen: result.screen, entity: result.entity, state: result.state ?? {} });
 
       // A different invoice is open: "field changes" would compare two different records.

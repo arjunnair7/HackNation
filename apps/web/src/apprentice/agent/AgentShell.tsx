@@ -15,7 +15,7 @@ import { DEFAULT_DIFF_THRESHOLD } from '../capture/frameDiff.ts'
 import { useScreenCapture } from '../capture/useScreenCapture.ts'
 import { api } from '../lib/api.ts'
 import { formatT, sessionT, useNow } from '../lib/clock.ts'
-import { useLog, type LogKind } from '../lib/log.ts'
+import { useLog, type LogEntry, type LogKind } from '../lib/log.ts'
 import { getSocket } from '../lib/socket.ts'
 import { BrainPanel } from '../panels/BrainPanel.tsx'
 import { CapturePanel } from '../panels/CapturePanel.tsx'
@@ -32,6 +32,8 @@ const EXPERT = { name: 'Sabine', role: 'accounts payable lead' }
 const TASK_NAME = 'processing supplier invoices before period close'
 const FEED_KINDS = new Set<LogKind>(['expert', 'agent', 'screen', 'answer', 'error'])
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
+const OFF_RECORD_PHRASE = /\boff the record\b/i
+type OffRecordSource = 'agent' | 'phrase' | 'button'
 
 /** Window B. The ElevenLabs provider wraps everything so any panel can reach the conversation. */
 export function AgentShell() {
@@ -47,13 +49,16 @@ function ApprenticeApp() {
   const debug = params.get('debug') === '1'
   const diffThreshold = Number(params.get('diff')) || DEFAULT_DIFF_THRESHOLD
 
-  const { entries, add } = useLog()
+  const { entries, add, markStruck, dropFrom } = useLog()
   const [session, setSession] = useState<Session | null>(null)
   const sessionRef = useRef<Session | null>(null)
   const [starting, setStarting] = useState(false)
   const [lastVision, setLastVision] = useState<ScreenEventsMessage | null>(null)
   const [moments, setMoments] = useState<Moment[]>([])
   const voice = useRef<VoiceSignal>({ level: 0, lastAboveAt: 0, lastTranscriptAt: 0, seen: false })
+  const [offRecord, setOffRecord] = useState<{ from: number } | null>(null)
+  const offRecordRef = useRef(false)
+  const goOffRecordRef = useRef<(source: OffRecordSource) => void>(() => {})
   const now = useNow(1000)
 
   useEffect(() => {
@@ -81,11 +86,29 @@ function ApprenticeApp() {
         voice.current.lastAboveAt = Date.now() // fallback if VAD never arrives
         voice.current.lastTranscriptAt = Date.now()
       }
-      add(role === 'agent' ? 'agent' : 'expert', message, t)
-      api.postTranscript(s.id, { t, role, text: message }).catch((err: Error) => add('error', `Transcript not saved: ${err.message}`, t))
+      // Off the record: nothing is captured, not even the agent's "Okay, off the record."
+      if (offRecordRef.current) return
+      if (role === 'user' && OFF_RECORD_PHRASE.test(message)) {
+        goOffRecordRef.current('phrase') // don't wait for the agent's tool call; this line is never stored
+        return
+      }
+      // The feed shows what was stored (redacted), not the raw line.
+      api
+        .postTranscript(s.id, { t, role, text: message })
+        .then((u) => add(role === 'agent' ? 'agent' : 'expert', u.text, t, role === 'user' ? u.id : undefined))
+        .catch((err: Error) => add('error', `Transcript not saved: ${err.message}`, t))
     },
   })
-  const { status, mode, startSession, endSession, sendContextualUpdate, sendUserActivity, sendUserMessage } = conversation
+  const { status, mode, startSession, endSession, sendContextualUpdate, sendUserActivity, sendUserMessage, setMuted } =
+    conversation
+  // setMuted throws when no conversation is active (before Start, after a disconnect): then there is no mic to mute.
+  const muteMic = (muted: boolean) => {
+    try {
+      setMuted(muted)
+    } catch {
+      /* no active conversation */
+    }
+  }
   const connected = status === 'connected'
   const connectedRef = useRef(connected)
   useEffect(() => {
@@ -111,7 +134,7 @@ function ApprenticeApp() {
     expertName: EXPERT.name,
     connected,
     agentSpeaking: mode === 'speaking',
-    offRecord: false, // Phase 5
+    offRecord: offRecord !== null,
     moments,
     lastScreenChangeAt: capture.lastScreenChangeAt,
     voice,
@@ -139,6 +162,7 @@ function ApprenticeApp() {
           })
           .catch((err: Error) => add('error', `Answer not saved: ${err.message}`, tNow()))
       },
+      go_off_record: () => goOffRecordRef.current('agent'),
     },
     (name, toolParams) => add('tool', `${name} ${JSON.stringify(toolParams)}`, tNow()),
   )
@@ -151,8 +175,8 @@ function ApprenticeApp() {
       setLastVision(m)
       for (const event of m.events) {
         const cue = screenCue(event)
-        add('screen', cue.replace(/^\[SCREEN \d+:\d+\] /, ''), event.t)
-        if (connectedRef.current) sendContextualUpdate(cue)
+        add('screen', cue.replace(/^\[SCREEN \d+:\d+\] /, ''), event.t, event.id)
+        if (connectedRef.current && !offRecordRef.current) sendContextualUpdate(cue)
       }
     }
     const onVisionError = (m: VisionErrorMessage) => {
@@ -163,7 +187,7 @@ function ApprenticeApp() {
     }
     const onAnswer = (m: AnswerRecordedMessage) => {
       if (m.sessionId !== sessionRef.current?.id) return
-      add('answer', `"${m.answer.quote}"${m.answer.guardrailText ? ` · guardrail: ${m.answer.guardrailText}` : ''}`, m.answer.t)
+      add('answer', `"${m.answer.quote}"${m.answer.guardrailText ? ` · guardrail: ${m.answer.guardrailText}` : ''}`, m.answer.t, m.answer.id)
     }
     socket.on('screen_events', onScreenEvents)
     socket.on('vision_error', onVisionError)
@@ -193,6 +217,8 @@ function ApprenticeApp() {
       setLastVision(null)
       setMoments([])
       detector.reset()
+      offRecordRef.current = false
+      setOffRecord(null)
       add('info', `Session ${s.id} started`, 0)
       startSession({
         agentId: INTERVIEWER_AGENT_ID,
@@ -207,9 +233,63 @@ function ApprenticeApp() {
   }
 
   const stop = () => {
+    if (offRecordRef.current) {
+      const s = sessionRef.current
+      if (s) api.offRecord(s.id, { to: sessionT(s.startedAtMs) }).catch(() => {})
+      offRecordRef.current = false
+      setOffRecord(null)
+      muteMic(false)
+    }
     endSession()
     capture.stop()
     add('info', 'Session stopped', tNow())
+  }
+
+  /**
+   * Q5 trust. Mutes the mic, pauses capture, and opens an off-record window on the server, which purges
+   * everything captured from `from` on. When the agent or the phrase triggers it, the window starts at
+   * the expert's last line (usually the "off the record" sentence itself).
+   */
+  const goOffRecord = (source: OffRecordSource) => {
+    const s = sessionRef.current
+    if (!s || offRecordRef.current) return
+    offRecordRef.current = true
+    const nowT = sessionT(s.startedAtMs)
+    const lastLineAgo = (Date.now() - voice.current.lastTranscriptAt) / 1000
+    const from = Math.max(0, source !== 'button' && lastLineAgo <= 15 ? nowT - lastLineAgo - 0.5 : nowT)
+    capture.pause()
+    api.offRecord(s.id, { from }).catch((err: Error) => add('error', `Off-record window not saved: ${err.message}`, nowT))
+    dropFrom(from)
+    setOffRecord({ from })
+    muteMic(true)
+    add('info', `Off the record from ${formatT(from)} (${source === 'agent' ? 'agent heard it' : source === 'phrase' ? 'heard "off the record"' : 'button'})`, from)
+  }
+  goOffRecordRef.current = goOffRecord
+
+  const resume = () => {
+    const s = sessionRef.current
+    if (!s || !offRecordRef.current) return
+    const to = sessionT(s.startedAtMs)
+    offRecordRef.current = false
+    setOffRecord(null)
+    muteMic(false)
+    if (connectedRef.current) sendContextualUpdate('[BACK_ON_RECORD]')
+    add('info', `Back on the record at ${formatT(to)}`, to)
+    // Close the window before the first new frame goes out, or the server would drop it.
+    api
+      .offRecord(s.id, { to })
+      .then(() => capture.resume())
+      .catch((err: Error) => add('error', `Could not go back on the record: ${err.message}`, to))
+  }
+
+  const strike = (entry: LogEntry) => {
+    const s = sessionRef.current
+    if (!s || !entry.ref) return
+    const id = entry.ref
+    api
+      .strike(s.id, { id })
+      .then(() => markStruck(id))
+      .catch((err: Error) => add('error', `Could not remove: ${err.message}`, tNow()))
   }
 
   const share = () => {
@@ -249,6 +329,11 @@ function ApprenticeApp() {
           <span className={`status status-${status}`}>
             {status === 'connected' ? (mode === 'speaking' ? 'Speaking' : 'Listening') : status}
           </span>
+          {session && !offRecord && (
+            <button type="button" className="appr-btn appr-btn-danger" onClick={() => goOffRecord('button')}>
+              Off the record
+            </button>
+          )}
           {live ? (
             <button type="button" className="appr-btn" onClick={stop}>
               Stop
@@ -268,6 +353,20 @@ function ApprenticeApp() {
         </div>
       )}
 
+      {offRecord && (
+        <div className="off-record" role="alert">
+          <div>
+            <strong>Off the record. Nothing is captured.</strong>
+            <span>
+              Mic muted, screen capture paused, everything since {formatT(offRecord.from)} dropped.
+            </span>
+          </div>
+          <button type="button" className="appr-btn appr-btn-primary" onClick={resume}>
+            Resume
+          </button>
+        </div>
+      )}
+
       <BrainPanel brain={detector.brain} moments={moments} expertName={EXPERT.name} />
 
       <CapturePanel
@@ -278,6 +377,7 @@ function ApprenticeApp() {
         threshold={diffThreshold}
         lastChangeAt={capture.lastChangeAt}
         framesSent={capture.framesSent}
+        paused={capture.paused}
         lastVision={lastVision}
         onShare={share}
         onStopSharing={capture.stop}
@@ -288,6 +388,7 @@ function ApprenticeApp() {
         <LiveFeed
           entries={entries.filter((e) => FEED_KINDS.has(e.kind))}
           empty="Transcript and screen events appear here once the session runs."
+          onStrike={session ? strike : undefined}
         />
       </section>
 

@@ -10,6 +10,7 @@ interface Props {
   threshold: number
   lastChangeAt: number
   framesSent: number
+  paused: boolean
   lastVision: ScreenEventsMessage | null
   onShare: () => void
   onStopSharing: () => void
@@ -17,7 +18,7 @@ interface Props {
 
 /** Share controls, live preview, change-detection meter and the last vision result. */
 export function CapturePanel(props: Props) {
-  const { sessionId, sharing, stream, diff, threshold, lastChangeAt, framesSent, lastVision } = props
+  const { sessionId, sharing, stream, diff, threshold, lastChangeAt, framesSent, paused, lastVision } = props
   const preview = useRef<HTMLVideoElement>(null)
   useEffect(() => {
     if (preview.current) preview.current.srcObject = stream
@@ -53,7 +54,11 @@ export function CapturePanel(props: Props) {
         <div className="capture-grid">
           <video ref={preview} className="capture-preview" autoPlay muted playsInline />
           <div className="capture-stats">
-            <div className={`pill ${busy ? 'pill-busy' : 'pill-quiet'}`}>{busy ? 'Screen busy' : 'Screen quiet'}</div>
+            {paused ? (
+              <div className="pill pill-off">Paused: off the record</div>
+            ) : (
+              <div className={`pill ${busy ? 'pill-busy' : 'pill-quiet'}`}>{busy ? 'Screen busy' : 'Screen quiet'}</div>
+            )}
             <div className="meter" title={`diff ${diff.toFixed(5)} / threshold ${threshold}`}>
               <div className="meter-fill" style={{ width: `${meter * 100}%` }} />
               <div className="meter-mark" />
