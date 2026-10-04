@@ -24,6 +24,7 @@ import { getSocket } from '../lib/socket.ts'
 import { BrainPanel } from '../panels/BrainPanel.tsx'
 import { CapturePanel } from '../panels/CapturePanel.tsx'
 import { DebriefPanel } from '../panels/DebriefPanel.tsx'
+import { WorkMapView } from '../panels/WorkMapView.tsx'
 import { DebugDrawer } from '../panels/DebugDrawer.tsx'
 import { LiveFeed } from '../panels/LiveFeed.tsx'
 import { useApprenticeClientTools } from './clientTools.ts'
@@ -371,6 +372,12 @@ function ApprenticeApp() {
   const startTeachbackRef = useRef(startTeachback)
   startTeachbackRef.current = startTeachback
 
+  const strikeMapItem = (id: string, struck: boolean) => {
+    const s = sessionRef.current
+    if (!s) return
+    api.mapStrike(s.id, { id, struck }).catch((err: Error) => add('error', `Could not ${struck ? 'remove' : 'restore'}: ${err.message}`, tNow()))
+  }
+
   const skipQuestion = (q: OpenQuestion) => {
     const s = sessionRef.current
     if (!s) return
@@ -470,6 +477,10 @@ function ApprenticeApp() {
 
       {map && phase === 'debrief' && (
         <DebriefPanel map={map} expertName={EXPERT.name} onSkip={skipQuestion} onStartTeachback={startTeachback} />
+      )}
+
+      {map && session && phase === 'debrief' && (
+        <WorkMapView sessionId={session.id} map={map} expertName={EXPERT.name} onStrike={strikeMapItem} showOpenLink />
       )}
 
       {phase === 'capture' && <BrainPanel brain={detector.brain} moments={moments} expertName={EXPERT.name} />}

@@ -32,6 +32,13 @@ export class WorkMapController {
     return this.maps.correction(id, body);
   }
 
+  /** Body: MapStrikeRequest. */
+  @Post('sessions/:id/map/strike')
+  @HttpCode(200)
+  strike(@Param('id') id: string, @Body() body: unknown): Promise<WorkMap> {
+    return this.maps.strike(id, body);
+  }
+
   @Post('sessions/:id/map/confirm')
   @HttpCode(200)
   confirm(@Param('id') id: string): Promise<WorkMap> {

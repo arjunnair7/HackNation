@@ -203,6 +203,29 @@ export class WorkMapService {
     });
   }
 
+  /**
+   * Strike a step or guardrail from the record (or restore it). Allowed on a confirmed map: it changes
+   * nothing the expert said, it only keeps the item out of the tutor and exports. Coverage is recounted.
+   */
+  strike(sessionId: string, body: unknown): Promise<WorkMap> {
+    const b = asObject(body);
+    if (typeof b.id !== 'string' || typeof b.struck !== 'boolean') throw new BadRequestException('Expected { id, struck }');
+    return this.locked(sessionId, async () => {
+      const map = this.get(sessionId);
+      if (!map.steps.some((s) => s.id === b.id) && !map.guardrails.some((g) => g.id === b.id)) {
+        throw new BadRequestException(`No step or guardrail ${String(b.id)}`);
+      }
+      const struck = new Set(map.struck);
+      if (b.struck) struck.add(b.id as string);
+      else struck.delete(b.id as string);
+      map.struck = [...struck];
+      map.coverage = coverageOf(map.steps, map.guardrails, map.struck);
+      this.save(map);
+      this.emit(map);
+      return map;
+    });
+  }
+
   /** confirm_teachback: lock the map. */
   confirm(sessionId: string): Promise<WorkMap> {
     return this.locked(sessionId, async () => {
@@ -321,6 +344,13 @@ export class WorkMapService {
         ...(appliesWhen && { appliesWhen }),
       });
     }
+    // Every guardrail links to a screen moment: the step that uses it, else the frame nearest its quote.
+    for (const g of guardrails) {
+      if (g.screenMoment?.frameId) continue;
+      const step = steps.find((s) => s.guardrailIds.includes(g.id));
+      const moment = step ? { t: step.screenMoment.t, frameId: step.screenMoment.frameId } : frameFor(g.t, undefined, frames);
+      if (moment.frameId) g.screenMoment = moment;
+    }
     return { steps, guardrails };
   }
 
@@ -404,9 +434,15 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9€]+/g, ' ').trim(
 function verifyQuote(q: RawQuote, sources: Map<string, Source>): Step['reason'] | undefined {
   const quote = (q.quote ?? '').trim();
   const cited = q.quoteRef ? sources.get(q.quoteRef) : undefined;
-  if (quote && cited && norm(cited.text).includes(norm(quote))) return { quote, t: cited.t, source: cited.source };
+  const contains = (s: Source) => norm(s.text).includes(norm(quote));
   if (quote) {
-    for (const s of sources.values()) if (norm(s.text).includes(norm(quote))) return { quote, t: s.t, source: s.source };
+    // A recorded answer wins over the same words in the plain transcript: its source (live question,
+    // debrief) is what the Work Map shows, not "said while working".
+    const answer = [...sources.values()].find((s) => s.source !== 'narration' && contains(s));
+    if (answer) return { quote, t: answer.t, source: answer.source };
+    if (cited && contains(cited)) return { quote, t: cited.t, source: cited.source };
+    const said = [...sources.values()].find(contains);
+    if (said) return { quote, t: said.t, source: said.source };
   }
   return cited ? { quote: cited.text, t: cited.t, source: cited.source } : undefined;
 }

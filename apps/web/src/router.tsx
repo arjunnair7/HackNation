@@ -1,5 +1,6 @@
 import { Link, Navigate, createBrowserRouter, useParams } from 'react-router-dom'
 import { AgentShell } from './apprentice/agent/AgentShell.tsx'
+import { MapPage } from './apprentice/MapPage.tsx'
 import { ErpLayout } from './erp/ErpLayout.tsx'
 import { InvoiceDetailPage } from './erp/InvoiceDetailPage.tsx'
 import { InvoiceListPage } from './erp/InvoiceListPage.tsx'
@@ -32,5 +33,6 @@ export const router = createBrowserRouter([
     ],
   },
   { path: '/apprentice', element: <AgentShell /> },
+  { path: '/map/:sessionId', element: <MapPage /> },
   { path: '*', element: <NotFound /> },
 ])

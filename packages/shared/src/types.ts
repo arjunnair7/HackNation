@@ -169,6 +169,9 @@ export interface MapAnswerRequest { questionId: string; reasonQuote?: string; sk
 /** POST /api/sessions/:id/map/correction (submit_correction during the teach-back). */
 export interface MapCorrectionRequest { correction: string }
 
+/** POST /api/sessions/:id/map/strike: the expert removes (or restores) a step or guardrail before publishing. */
+export interface MapStrikeRequest { id: string; struck: boolean }
+
 /** socket `map_updated` */
 export interface MapUpdatedMessage { sessionId: string; map: WorkMap; compact: string }
 

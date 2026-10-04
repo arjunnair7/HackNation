@@ -7,6 +7,7 @@ import type {
   MapAnswerRequest,
   MapCorrectionRequest,
   MapDraftResponse,
+  MapStrikeRequest,
   Moment,
   MomentStatusRequest,
   OffRecordRequest,
@@ -33,6 +34,16 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return data as T
 }
 
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`/api${path}`)
+  const data: unknown = await res.json().catch(() => null)
+  if (!res.ok) {
+    const message = (data as { message?: unknown } | null)?.message
+    throw new Error(typeof message === 'string' ? message : `${path} failed (${res.status})`)
+  }
+  return data as T
+}
+
 export const api = {
   createSession: (body: CreateSessionRequest) => post<Session>('/sessions', body),
   postTranscript: (sessionId: string, body: TranscriptRequest) =>
@@ -49,5 +60,8 @@ export const api = {
   mapAnswer: (sessionId: string, body: MapAnswerRequest) => post<WorkMap>(`/sessions/${sessionId}/map/answer`, body),
   mapCorrection: (sessionId: string, body: MapCorrectionRequest) => post<WorkMap>(`/sessions/${sessionId}/map/correction`, body),
   mapConfirm: (sessionId: string) => post<WorkMap>(`/sessions/${sessionId}/map/confirm`, {}),
+  mapStrike: (sessionId: string, body: MapStrikeRequest) => post<WorkMap>(`/sessions/${sessionId}/map/strike`, body),
+  getSession: (sessionId: string) => get<Session>(`/sessions/${sessionId}`),
+  getMap: (sessionId: string) => get<WorkMap>(`/sessions/${sessionId}/map`),
   frameUrl: (sessionId: string, frameId: string) => `/api/sessions/${sessionId}/frames/${frameId}`,
 }
