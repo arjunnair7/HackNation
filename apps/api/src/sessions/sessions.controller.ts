@@ -59,6 +59,13 @@ export class SessionsController {
     return this.moments.setStatus(id, body);
   }
 
+  /** End a session; for a teach session this switches the save gate off. */
+  @Post(':id/end')
+  @HttpCode(200)
+  end(@Param('id') id: string): { ended: true } {
+    return this.sessions.end(id);
+  }
+
   /** Body: OffRecordRequest. { from } opens a window and purges what it covers; { to } closes it. */
   @Post(':id/off-record')
   @HttpCode(200)

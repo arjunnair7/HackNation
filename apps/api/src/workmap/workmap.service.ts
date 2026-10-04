@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type {
@@ -7,11 +7,13 @@ import type {
   Guardrail,
   GuardrailKind,
   MapDraftResponse,
+  MapSummary,
   MapUpdatedMessage,
   OpenQuestion,
   ReadyForTeachbackMessage,
   Session,
   Step,
+  TutorMapResponse,
   WorkMap,
 } from '@apprentice/shared';
 import { newId, SAFE_ID } from '../common/ids';
@@ -36,7 +38,7 @@ import {
 } from '../prompts/workmap';
 import { EventsGateway } from '../realtime/events.gateway';
 import { SessionStore } from '../sessions/session.store';
-import { renderCompact } from './render';
+import { renderCompact, renderForTutor } from './render';
 import { validRule } from './rules';
 
 const MIN_OPEN_QUESTIONS = 3;
@@ -131,6 +133,28 @@ export class WorkMapService {
     const map = this.load(mapId);
     if (!map) throw new NotFoundException(`Work Map ${mapId} not found`);
     return map;
+  }
+
+  /** Every map, newest confirmed first (the "teach from" picker). */
+  list(): MapSummary[] {
+    if (!existsSync(this.root)) return [];
+    return readdirSync(this.root)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => this.load(f.replace(/\.json$/, '')))
+      .filter((m): m is WorkMap => !!m)
+      .map((m) => ({
+        id: m.id, sessionId: m.sessionId, version: m.version, expert: m.expert,
+        steps: m.steps.filter((s) => !m.struck.includes(s.id)).length,
+        guardrails: m.guardrails.filter((g) => !m.struck.includes(g.id)).length,
+        teachback: m.teachback.status, confirmedAt: m.teachback.confirmedAt,
+      }))
+      .sort((a, b) => Number(b.teachback === 'confirmed') - Number(a.teachback === 'confirmed') || (b.confirmedAt ?? '').localeCompare(a.confirmedAt ?? ''));
+  }
+
+  /** The map plus the tutor's {{work_map}} text. */
+  tutor(mapId: string): TutorMapResponse {
+    const map = this.getById(mapId);
+    return { map, tutorText: renderForTutor(map) };
   }
 
   /** record_answer with an open-question id (or Skip): close the question, then fold the answer into the map. */

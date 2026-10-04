@@ -179,6 +179,45 @@ export interface MapUpdatedMessage { sessionId: string; map: WorkMap; compact: s
 export interface ReadyForTeachbackMessage { sessionId: string; map: WorkMap; compact: string }
 
 // ---------------------------------------------------------------------------
+// Tutor (Phase 8)
+// ---------------------------------------------------------------------------
+
+/** GET /api/maps: summaries for the "teach from" picker. */
+export interface MapSummary {
+  id: string; sessionId: string; version: number; expert: { name: string; role: string };
+  steps: number; guardrails: number; teachback: WorkMap['teachback']['status']; confirmedAt?: string;
+}
+
+/** GET /api/maps/:mapId/tutor: the map plus renderForTutor(map), the tutor's {{work_map}}. */
+export interface TutorMapResponse { map: WorkMap; tutorText: string }
+
+/** POST /api/sessions/:id/mastery (record_prediction client tool). */
+export interface RecordPredictionRequest { stepId: string; correct: boolean; traineeAnswer?: string; invoiceId?: string }
+
+/** socket `teach_invoice_opened`: the trainee opened an invoice (ERP GET, de-duplicated). */
+export interface TeachInvoiceMessage { sessionId: string; invoiceId: string; label: string }
+
+/** socket `teach_cue`: one [PREDICT] or [STEP_START] for the invoice just opened; the web sends it at a quiet moment. */
+export interface TeachCueMessage {
+  sessionId: string; invoiceId: string; type: 'PREDICT' | 'STEP_START'; stepId: string; text: string;
+  boundary?: boolean; // the amount sits next to one of the step's thresholds
+}
+
+/** socket `guardrail_risk` (draft would violate on save) and `guardrail_blocked` (the save gate refused). */
+export interface GuardrailAlertMessage {
+  sessionId: string; invoiceId: string;
+  guardrail: { id: string; kind: GuardrailKind; text: string; quote: string };
+  stepId?: string; // the step that uses this guardrail (for the replay)
+  text: string;    // the cue for the tutor
+}
+
+/** socket `guardrail_resolved`: a flagged draft no longer violates. */
+export interface GuardrailResolvedMessage { sessionId: string; invoiceId: string; guardrailId: string }
+
+/** socket `mastery_updated` */
+export interface MasteryUpdatedMessage { sessionId: string; mastery: MasteryRecord[] }
+
+// ---------------------------------------------------------------------------
 // ElevenLabs client tools (BUILD_PLAN §6). Names and params are case-sensitive:
 // apps/api/scripts/setup-agents.ts registers exactly these, the web app handles them.
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
-import type { MapDraftResponse, WorkMap } from '@apprentice/shared';
+import type { MapDraftResponse, MapSummary, TutorMapResponse, WorkMap } from '@apprentice/shared';
 import { WorkMapService } from './workmap.service';
 
 @Controller()
@@ -43,6 +43,16 @@ export class WorkMapController {
   @HttpCode(200)
   confirm(@Param('id') id: string): Promise<WorkMap> {
     return this.maps.confirm(id);
+  }
+
+  @Get('maps')
+  list(): MapSummary[] {
+    return this.maps.list();
+  }
+
+  @Get('maps/:mapId/tutor')
+  tutor(@Param('mapId') mapId: string): TutorMapResponse {
+    return this.maps.tutor(mapId);
   }
 
   @Get('maps/:mapId')

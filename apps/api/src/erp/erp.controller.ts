@@ -1,10 +1,14 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import type { ErpInvoiceDetail, ErpInvoiceSummary, ErpQueue, InvoiceDraft } from '@apprentice/shared';
+import { BadRequestException, Body, ConflictException, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import type { ErpGuardrailBlock, ErpInvoiceDetail, ErpInvoiceSummary, ErpQueue, InvoiceDraft } from '@apprentice/shared';
+import { GuardrailService } from '../guardrails/guardrails.service';
 import { ErpService, QUEUES } from './erp.service';
 
 @Controller('erp')
 export class ErpController {
-  constructor(private readonly erp: ErpService) {}
+  constructor(
+    private readonly erp: ErpService,
+    private readonly guardrails: GuardrailService,
+  ) {}
 
   /** GET /api/erp/invoices?queue=expert|trainee (all invoices without a queue). */
   @Get('invoices')
@@ -17,20 +21,34 @@ export class ErpController {
 
   @Get('invoices/:id')
   get(@Param('id') id: string): ErpInvoiceDetail {
-    return this.erp.getDetail(id);
+    const detail = this.erp.getDetail(id);
+    this.guardrails.onInvoiceOpened(detail.invoice.id); // tutor: [PREDICT] / [STEP_START]
+    return detail;
   }
 
   /** Autosaved edits (cost center, asset number, comment). Body: DraftPatch. */
   @Patch('invoices/:id/draft')
   patchDraft(@Param('id') id: string, @Body() body: unknown): InvoiceDraft {
-    return this.erp.patchDraft(id, body);
+    const draft = this.erp.patchDraft(id, body);
+    this.guardrails.onDraftChanged(id.toUpperCase()); // tutor: guardrail risk, once the edit settles
+    return draft;
   }
 
-  /** Approve / hold / route. Body: ErpActionRequest. The guardrail save gate is added in Phase 8. */
+  /**
+   * Approve / hold / route. Body: ErpActionRequest. While a teach session is active the save gate
+   * runs first: a violated guardrail answers 409 ErpGuardrailBlock and nothing is saved.
+   */
   @Post('invoices/:id/action')
   @HttpCode(200)
-  action(@Param('id') id: string, @Body() body: unknown): ErpInvoiceDetail {
-    return this.erp.applyAction(id, body);
+  async action(@Param('id') id: string, @Body() body: unknown): Promise<ErpInvoiceDetail> {
+    const blocked = await this.guardrails.gate(id, body);
+    if (blocked) {
+      const response: ErpGuardrailBlock = { error: 'guardrail_blocked', guardrail: { id: blocked.id, kind: blocked.kind, text: blocked.text } };
+      throw new ConflictException(response);
+    }
+    const detail = this.erp.applyAction(id, body);
+    this.guardrails.afterSave(detail.invoice.id);
+    return detail;
   }
 
   @Post('reset')

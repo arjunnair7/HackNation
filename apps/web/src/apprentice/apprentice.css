@@ -893,6 +893,61 @@ body:has(.appr) {
   font-size: 14px;
 }
 
+/* --- tutor + mastery ------------------------------------------------------------- */
+
+.tutor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.tutor-alerts,
+.mastery-list {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.tutor-alerts li,
+.mastery-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px solid #1f2733;
+  font-size: 14px;
+}
+
+.mastery-list li {
+  grid-template-columns: 1fr auto;
+}
+
+.alert-risk strong,
+.alert-blocked strong,
+.mastery-hint strong,
+.mastery-caught strong {
+  color: var(--a-danger);
+}
+
+.alert-resolved strong,
+.mastery-mastered strong,
+.mastery-fixed strong {
+  color: var(--a-ok);
+}
+
+.mastery-untested strong {
+  color: var(--a-muted);
+}
+
+.practise {
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--a-line);
+  border-radius: 6px;
+}
+
 /* --- debug ------------------------------------------------------------------ */
 
 .debug summary {

@@ -17,6 +17,7 @@ import { redactText } from '../privacy/redact';
 import { EventsGateway } from '../realtime/events.gateway';
 import { VisionService } from '../vision/vision.service';
 import { SessionStore } from './session.store';
+import { TeachState } from './teach.state';
 
 const MODES: readonly Mode[] = ['capture', 'debrief', 'teach'];
 const EVENT_KINDS: readonly ScreenEvent['kind'][] = ['opened', 'navigated', 'field_changed', 'action', 'lookup', 'typed', 'read', 'other'];
@@ -34,19 +35,32 @@ export class SessionsService {
     private readonly vision: VisionService,
     private readonly gateway: EventsGateway,
     private readonly moments: MomentsService,
+    private readonly teach: TeachState,
   ) {}
 
   create(body: unknown): Session {
     const b = asObject(body ?? {}) as CreateSessionRequest;
     const mode = b.mode ?? 'capture';
     if (!MODES.includes(mode)) throw new BadRequestException(`mode must be one of: ${MODES.join(', ')}`);
-    return this.store.create({
+    if (mode === 'teach' && !b.mapId) throw new BadRequestException('A teach session needs the mapId it teaches');
+    const session = this.store.create({
       mode,
       expert: b.expert ?? DEFAULT_EXPERT,
       task: b.task ?? DEFAULT_TASK,
       ...(b.trainee && { trainee: b.trainee }),
       ...(b.mapId && { mapId: b.mapId }),
+      ...(mode === 'teach' && { mastery: [] }),
     });
+    // Phase 8: the newest teach session is the active one (save gate + risk checks use its map).
+    if (mode === 'teach') this.teach.activeSessionId = session.id;
+    return session;
+  }
+
+  /** End training: the save gate switches off. */
+  end(sessionId: string): { ended: true } {
+    this.store.require(sessionId);
+    if (this.teach.activeSessionId === sessionId) this.teach.activeSessionId = undefined;
+    return { ended: true };
   }
 
   addUtterance(sessionId: string, body: unknown): Utterance {

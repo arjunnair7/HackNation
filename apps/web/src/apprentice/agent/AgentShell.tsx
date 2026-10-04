@@ -28,6 +28,7 @@ import { WorkMapView } from '../panels/WorkMapView.tsx'
 import { DebugDrawer } from '../panels/DebugDrawer.tsx'
 import { LiveFeed } from '../panels/LiveFeed.tsx'
 import { useApprenticeClientTools } from './clientTools.ts'
+import { TeachApp } from './TeachApp.tsx'
 import { debriefCue, screenCue, teachbackCue, workMapDraftCue, type CueChannel } from './cues.ts'
 import { RULES } from './momentRules.ts'
 import { useMomentDetector, type VoiceSignal } from './useMomentDetector.ts'
@@ -44,11 +45,9 @@ type Phase = 'capture' | 'drafting' | 'debrief'
 
 /** Window B. The ElevenLabs provider wraps everything so any panel can reach the conversation. */
 export function AgentShell() {
-  return (
-    <ConversationProvider>
-      <ApprenticeApp />
-    </ConversationProvider>
-  )
+  const [params] = useSearchParams()
+  // Switching modes is a full page load (plain links), so a running conversation never leaks across.
+  return <ConversationProvider>{params.get('mode') === 'teach' ? <TeachApp /> : <ApprenticeApp />}</ConversationProvider>
 }
 
 function ApprenticeApp() {
@@ -424,7 +423,8 @@ function ApprenticeApp() {
         <div>
           <h1>Apprentice</h1>
           <div className="appr-sub">
-            Shadowing {EXPERT.name} · {session ? `${session.id} · ${formatT(sessionT(session.startedAtMs, now))}` : 'no session'}
+            Shadowing {EXPERT.name} · {session ? `${session.id} · ${formatT(sessionT(session.startedAtMs, now))}` : 'no session'} ·{' '}
+            <a href="/apprentice?mode=teach">teach mode</a>
           </div>
         </div>
         <div className="appr-head-right">

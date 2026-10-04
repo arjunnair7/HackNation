@@ -1,17 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Guardrail, GuardrailKind, Session, Step, Utterance, WorkMap } from '@apprentice/shared'
+import type { Session, Utterance, WorkMap } from '@apprentice/shared'
 import { api } from '../lib/api.ts'
 import { formatT } from '../lib/clock.ts'
+import { KIND_LABEL, SOURCE_LABEL, expertWords, guardrailMoment, guardrailReplay, reasonOf, stepReplay } from '../lib/mapReplay.ts'
 import { ReplayModal, type ReplayTarget } from './ReplayModal.tsx'
-
-export const KIND_LABEL: Record<GuardrailKind, string> = {
-  limit: 'Limit',
-  exception: 'Exception',
-  stop_and_ask: 'Stop and ask',
-  never: 'Never',
-  rule: 'Rule',
-}
-const SOURCE_LABEL = { live: 'live question', debrief: 'debrief', narration: 'said while working' } as const
 const SAID_HERE_S = 15
 
 interface Props {
@@ -37,29 +29,8 @@ export function WorkMapView({ sessionId, map, expertName, onStrike, showOpenLink
   const frames = session?.frames ?? []
   const guardrailById = new Map(map.guardrails.map((g) => [g.id, g]))
 
-  // Maps drafted before the server preferred answers may label a debrief answer "said while working".
-  const reasonOf = (s: Step) => {
-    if (!s.reason) return undefined
-    const quote = s.reason.quote.toLowerCase()
-    const answer = session?.answers.find((a) => a.source !== 'narration' && a.quote.toLowerCase().includes(quote))
-    return answer ? { ...s.reason, source: answer.source, t: answer.t } : s.reason
-  }
-
-  const stepTarget = (s: Step): ReplayTarget => {
-    const n = liveSteps.findIndex((x) => x.id === s.id) + 1
-    return {
-      kind: struck.has(s.id) ? 'Step (removed)' : `Step ${n}/${liveSteps.length}`,
-      title: s.title,
-      moment: s.screenMoment,
-      quote: reasonOf(s) ? { text: reasonOf(s)!.quote, label: `${SOURCE_LABEL[reasonOf(s)!.source]} at ${formatT(reasonOf(s)!.t)}` } : undefined,
-    }
-  }
-  const guardrailTarget = (g: Guardrail): ReplayTarget => ({
-    kind: `Guardrail · ${KIND_LABEL[g.kind]}`,
-    title: g.text,
-    moment: guardrailMoment(g, map.steps, frames),
-    quote: g.quote ? { text: g.quote, label: `said at ${formatT(g.t)}` } : undefined,
-  })
+  const stepTarget = (s: Parameters<typeof stepReplay>[1]) => stepReplay(map, s, session)
+  const guardrailTarget = (g: Parameters<typeof guardrailReplay>[1]) => guardrailReplay(map, g, session)
 
   return (
     <section className="appr-card workmap">
@@ -85,7 +56,7 @@ export function WorkMapView({ sessionId, map, expertName, onStrike, showOpenLink
       <ol className="timeline">
         {map.steps.map((s) => {
           const removed = struck.has(s.id)
-          const reason = reasonOf(s)
+          const reason = reasonOf(s, session)
           const said = reason ? undefined : nearestWords(words, s.screenMoment.t)
           return (
             <li key={s.id} className={`tl-item${removed ? ' tl-removed' : ''}${changed.has(s.id) ? ' flash' : ''}`}>
@@ -202,12 +173,6 @@ function useSession(sessionId: string, map: WorkMap): Session | null {
   return session
 }
 
-/** The expert's on-record, unstruck lines. */
-function expertWords(session: Session | null): Utterance[] {
-  if (!session) return []
-  const struck = new Set(session.struck ?? [])
-  return session.transcript.filter((u) => u.speaker === 'expert' && !u.offRecord && !struck.has(u.id))
-}
 
 function nearestWords(words: Utterance[], t: number): Utterance | undefined {
   return words
@@ -215,14 +180,6 @@ function nearestWords(words: Utterance[], t: number): Utterance | undefined {
     .sort((a, b) => Math.abs(a.t - t) - Math.abs(b.t - t))[0]
 }
 
-/** A guardrail's screen moment; older maps may lack one, then the linked step's, else the frame nearest its quote. */
-function guardrailMoment(g: Guardrail, steps: Step[], frames: Session['frames']): { t: number; frameId: string } {
-  if (g.screenMoment?.frameId) return g.screenMoment
-  const step = steps.find((s) => s.guardrailIds.includes(g.id))
-  if (step) return { t: step.screenMoment.t, frameId: step.screenMoment.frameId }
-  const nearest = [...frames].sort((a, b) => Math.abs(a.t - g.t) - Math.abs(b.t - g.t))[0]
-  return nearest ? { t: nearest.t, frameId: nearest.id } : { t: g.t, frameId: '' }
-}
 
 /** Export without struck items (they stay out of exports, like the tutor). */
 function exportJson(map: WorkMap) {

@@ -114,7 +114,7 @@ export class VisionService {
         sessionId, frameId: frame.id, t: frame.t, screen: result.screen, entity: result.entity, events, ms,
       };
       this.gateway.emit('screen_events', message);
-      if (events.length) this.moments.onEvents(sessionId, events);
+      if (events.length && this.store.get(sessionId)?.mode === 'capture') this.moments.onEvents(sessionId, events);
       this.logger.log(`${sessionId} ${frame.id} t=${frame.t.toFixed(1)}s ${result.screen} ${result.entity ?? ''}: ${events.length} event(s) in ${ms} ms`);
     } catch (err) {
       const error = (err as Error).message;

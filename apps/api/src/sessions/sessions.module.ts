@@ -7,11 +7,12 @@ import { VisionService } from '../vision/vision.service';
 import { SessionStore } from './session.store';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
+import { TeachState } from './teach.state';
 
 @Module({
   imports: [LlmModule, RealtimeModule, ErpModule],
   controllers: [SessionsController],
-  providers: [SessionStore, SessionsService, VisionService, MomentsService],
-  exports: [SessionStore, SessionsService],
+  providers: [SessionStore, SessionsService, VisionService, MomentsService, TeachState],
+  exports: [SessionStore, SessionsService, TeachState],
 })
 export class SessionsModule {}

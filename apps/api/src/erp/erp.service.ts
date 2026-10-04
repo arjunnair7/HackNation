@@ -99,26 +99,20 @@ export class ErpService {
     return { ...entry.draft };
   }
 
+  /**
+   * The ErpContext as it would be saved with this action (draft.action/routeTo/comment applied),
+   * validated like applyAction but without saving: what the save gate evaluates.
+   */
+  previewAction(id: string, body: unknown): ErpContext {
+    const invoice = this.invoice(id);
+    const { draft } = this.validatedAction(invoice, body);
+    return { ...this.getContext(invoice.id), draft };
+  }
+
   applyAction(id: string, body: unknown): ErpInvoiceDetail {
     const invoice = this.invoice(id);
-    const entry = this.openEntry(invoice);
-    const req = parseActionRequest(body);
-    const comment = (req.comment ?? entry.draft.comment ?? '').trim();
-
-    if (req.action === 'hold' && !comment) {
-      throw new BadRequestException('Add a comment before putting the invoice on hold.');
-    }
-    if (req.action === 'route' && !req.routeTo) {
-      throw new BadRequestException('Choose where to route the invoice: controller or intercompany.');
-    }
-    // Phase 8: the save gate evaluates guardrails here and throws 409 ErpGuardrailBlock.
-
-    entry.draft = {
-      ...entry.draft,
-      action: req.action,
-      routeTo: req.action === 'route' ? req.routeTo : undefined,
-      comment: comment || undefined,
-    };
+    const { entry, req, draft } = this.validatedAction(invoice, body);
+    entry.draft = draft;
     entry.status = STATUS_AFTER[req.action];
     entry.processedAt = new Date().toISOString();
     this.persist();
@@ -130,6 +124,25 @@ export class ErpService {
     this.state = seedState();
     this.persist();
     this.logger.log('ERP reset to seed state');
+  }
+
+  private validatedAction(invoice: Invoice, body: unknown) {
+    const entry = this.openEntry(invoice);
+    const req = parseActionRequest(body);
+    const comment = (req.comment ?? entry.draft.comment ?? '').trim();
+    if (req.action === 'hold' && !comment) {
+      throw new BadRequestException('Add a comment before putting the invoice on hold.');
+    }
+    if (req.action === 'route' && !req.routeTo) {
+      throw new BadRequestException('Choose where to route the invoice: controller or intercompany.');
+    }
+    const draft: InvoiceDraft = {
+      ...entry.draft,
+      action: req.action,
+      routeTo: req.action === 'route' ? req.routeTo : undefined,
+      comment: comment || undefined,
+    };
+    return { entry, req, draft };
   }
 
   private invoice(id: string): Invoice {

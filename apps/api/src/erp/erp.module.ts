@@ -1,9 +1,8 @@
 import { Module } from '@nestjs/common';
-import { ErpController } from './erp.controller';
 import { ErpService } from './erp.service';
 
+/** The sandbox ERP's state. Its HTTP controller lives in ErpHttpModule, next to the guardrail gate. */
 @Module({
-  controllers: [ErpController],
   providers: [ErpService],
   exports: [ErpService],
 })

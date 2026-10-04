@@ -5,7 +5,7 @@ import type { FrameRef, Session } from '@apprentice/shared';
 import { newId, SAFE_ID } from '../common/ids';
 import { dataDir } from '../common/paths';
 
-export type NewSession = Pick<Session, 'mode' | 'expert' | 'task'> & Partial<Pick<Session, 'trainee' | 'mapId'>>;
+export type NewSession = Pick<Session, 'mode' | 'expert' | 'task'> & Partial<Pick<Session, 'trainee' | 'mapId' | 'mastery'>>;
 
 /**
  * Sessions live in memory and are written through to
